@@ -1,0 +1,37 @@
+appId: com.opac.librarysystem
+productName: OPAC Library System
+copyright: Copyright © 2026 OPAC Library System
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**
+  - node_modules/**
+  - package.json
+
+asarUnpack:
+  - node_modules/better-sqlite3/**
+
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: true
+  perMachine: false
+  allowToChangeInstallationDirectory: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: OPAC Library System
+  artifactName: OPAC-Library-System-Setup-${version}.${ext}
+  uninstallDisplayName: OPAC Library System
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  deleteAppDataOnUninstall: false
+
+npmRebuild: false
