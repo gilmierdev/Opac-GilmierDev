@@ -9,13 +9,26 @@
   Var OpacModeChoice
 
   Function OpacModePageCreate
+    StrCpy $0 "$TEMP\opac-installer-page.log"
+    FileOpen $1 $0 w
+    FileWrite $1 "create-called"
+    FileClose $1
     ${IfNot} ${Silent}
       nsDialogs::Create 1018
       Pop $OpacModeDlg
 
       ${If} $OpacModeDlg == error
-        Abort
+        StrCpy $0 "$TEMP\opac-installer-page.log"
+        FileOpen $1 $0 a
+        FileWrite $1 "$\r$\nnsdialogs-error"
+        FileClose $1
+        MessageBox MB_ICONSTOP|MB_OK "An internal installer dialog error occurred. Cannot ask how this computer will use the library. Aborting."
+        Quit
       ${EndIf}
+      StrCpy $0 "$TEMP\opac-installer-page.log"
+      FileOpen $1 $0 a
+      FileWrite $1 "$\r$\ncontrols-created"
+      FileClose $1
 
       ${NSD_CreateLabel} 0 0 100% 20u "Choose how this computer will use OPAC Library System:"
       Pop $OpacModeLabel
