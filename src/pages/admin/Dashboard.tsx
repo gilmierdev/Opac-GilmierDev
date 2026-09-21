@@ -9,13 +9,15 @@ import {
   Users,
   Tags,
   Building2,
-  Clock
+  Clock,
+  Network as NetworkIcon,
+  Server
 } from 'lucide-react'
 import { useAppStore } from '../../stores/app'
 import Spinner from '../../components/ui/Spinner'
 import BookCover from '../../components/BookCover'
 import Badge from '../../components/ui/Badge'
-import type { DashboardStats, Book } from '@shared/types'
+import type { DashboardStats, Book, ServerStatus } from '@shared/types'
 import { formatDate, errorMessage, classNames } from '../../lib/utils'
 
 function StatCard({
@@ -61,12 +63,17 @@ export default function Dashboard() {
   const user = useAppStore((s) => s.user)
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [server, setServer] = useState<ServerStatus | null>(null)
 
   useEffect(() => {
     void window.api.books
       .stats()
       .then(setStats)
       .catch((err) => setError(errorMessage(err)))
+    window.api.network
+      .status()
+      .then(setServer)
+      .catch(() => setServer(null))
   }, [])
 
   if (error) {
@@ -84,6 +91,36 @@ export default function Dashboard() {
         </h1>
         <p className="mt-1 text-sm text-muted">Here's what's happening in your library today.</p>
       </div>
+
+      <Link
+        to="/admin/network"
+        className="ring-focus flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-surface p-4 shadow-card dark:border-slate-700"
+      >
+        <div className="flex items-center gap-3">
+          <span className="rounded-lg bg-primary-50 p-2 dark:bg-primary-900/30">
+            <NetworkIcon className="h-5 w-5 text-primary-500" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-foreground">Network Server</p>
+            <p className="text-xs text-muted">
+              {server ? (
+                server.running ? (
+                  <>Online · {server.connectedUsers} connected user{server.connectedUsers === 1 ? '' : 's'}</>
+                ) : (
+                  'Offline — start sharing your catalog'
+                )
+              ) : (
+                'Status unavailable'
+              )}
+            </p>
+          </div>
+        </div>
+        {server?.running ? (
+          <Badge tone="success" icon={Server}>Online</Badge>
+        ) : (
+          <Badge tone="muted" icon={Server}>Offline</Badge>
+        )}
+      </Link>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
         <StatCard label="Total Books" value={stats.totalBooks} icon={BookOpen} tone="bg-orange-50 dark:bg-slate-800/60" to="/admin/books" />

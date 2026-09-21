@@ -43,6 +43,30 @@ const api: LibraryApi = {
   restart: () => {
     void ipcRenderer.invoke('app:restart')
   },
+  installInfo: () => invoke(IPC.appInstallInfo),
+  mode: () => invoke(IPC.appMode),
+
+  connection: {
+    get: () => invoke(IPC.connectionGet),
+    save: (config) => invoke(IPC.connectionSave, config),
+    test: (config) => invoke(IPC.connectionTest, config),
+    reset: () => invoke(IPC.connectionReset)
+  },
+
+  network: {
+    status: () => invoke(IPC.networkStatus),
+    start: () => invoke(IPC.networkStart),
+    stop: () => invoke(IPC.networkStop),
+    restart: () => invoke(IPC.networkRestart),
+    tokenInfo: () => invoke(IPC.networkTokenInfo),
+    regenerateToken: () => invoke(IPC.networkRegenerateToken),
+    setPort: (port: number) => invoke(IPC.networkSetPort, port),
+    firewall: () => invoke(IPC.networkFirewall)
+  },
+
+  database: {
+    status: () => invoke(IPC.databaseStatus)
+  },
 
   auth: {
     needsSetup: () => invoke<boolean>(IPC.authNeedsSetup),

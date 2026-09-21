@@ -2,8 +2,8 @@ import { dialog } from 'electron'
 import { copyFileSync, existsSync, openSync, readSync, closeSync, unlinkSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import type { AppDirs } from '../config/paths'
 import { logger } from '../utils/logger'
+import type { ImageResult } from '@shared/types'
 
 const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp']
 const ALLOWED_MIME_SIGNATURES: Array<{ bytes: number[]; ext: string[] }> = [
@@ -13,20 +13,21 @@ const ALLOWED_MIME_SIGNATURES: Array<{ bytes: number[]; ext: string[] }> = [
 ]
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024
 
-export interface ImageSaveResult {
+export interface ImageFileResult {
   filename: string | null
   error?: string
 }
 
 export interface BookImageService {
-  pickAndSave(): Promise<ImageSaveResult>
-  saveFromPath(sourcePath: string): ImageSaveResult
+  pickCover(): Promise<ImageResult>
+  pickLogo(): Promise<ImageResult>
+  saveFromPath(sourcePath: string): ImageFileResult
   delete(filename: string): Promise<void>
 }
 
-export function bookImageService(dirs: AppDirs): BookImageService {
+export function bookImageService(imagesDir: string): BookImageService {
   function sanitizeExtension(filePath: string): string | null {
-    const ext = join(filePath).slice(filePath.lastIndexOf('.')).toLowerCase()
+    const ext = filePath.slice(filePath.lastIndexOf('.')).toLowerCase()
     return ALLOWED_EXTENSIONS.includes(ext) ? ext : null
   }
 
@@ -44,7 +45,7 @@ export function bookImageService(dirs: AppDirs): BookImageService {
     }
   }
 
-  function save(sourcePath: string): ImageSaveResult {
+  function save(sourcePath: string): ImageFileResult {
     try {
       if (!sourcePath || !existsSync(sourcePath)) {
         return { filename: null, error: 'Selected file does not exist' }
@@ -61,7 +62,7 @@ export function bookImageService(dirs: AppDirs): BookImageService {
         return { filename: null, error: 'The selected file is not a valid image' }
       }
       const filename = `book-${Date.now()}-${randomUUID().slice(0, 8)}${ext}`
-      const dest = join(dirs.imagesDir, filename)
+      const dest = join(imagesDir, filename)
       copyFileSync(sourcePath, dest)
       return { filename }
     } catch (err) {
@@ -70,30 +71,31 @@ export function bookImageService(dirs: AppDirs): BookImageService {
     }
   }
 
+  async function pick(): Promise<ImageResult> {
+    const result = await dialog.showOpenDialog({
+      title: 'Select Image',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return { filename: null }
+    }
+    return save(result.filePaths[0])
+  }
+
   return {
-    async pickAndSave() {
-      const result = await dialog.showOpenDialog({
-        title: 'Select Book Cover Image',
-        properties: ['openFile'],
-        filters: [
-          { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp'] },
-          { name: 'All Files', extensions: ['*'] }
-        ]
-      })
-      if (result.canceled || result.filePaths.length === 0) {
-        return { filename: null }
-      }
-      return save(result.filePaths[0])
-    },
-    saveFromPath(sourcePath) {
-      return save(sourcePath)
-    },
+    pickCover: () => pick(),
+    pickLogo: () => pick(),
+    saveFromPath: (sourcePath) => save(sourcePath),
     async delete(filename: string) {
       const safeName = filename.replaceAll('\\', '/').split('/').pop() ?? ''
       if (!safeName || safeName !== filename || /\.\./.test(safeName)) {
         throw new Error('Invalid image filename')
       }
-      const full = join(dirs.imagesDir, safeName)
+      const full = join(imagesDir, safeName)
       try {
         if (existsSync(full)) unlinkSync(full)
       } catch (err) {

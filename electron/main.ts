@@ -1,41 +1,38 @@
 import { app, BrowserWindow, protocol, net, session } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { existsSync } from 'node:fs'
-import { getAppDirs, ensureDirs, resolveImagePath } from './config/paths'
+import { existsSync, writeFileSync } from 'node:fs'
+import { getAppDirs, ensureDirs, ensureSystemDirs, getSystemDirs, resolveImagePath } from './config/paths'
+import { getAppMode } from './config/mode'
+import type { AppMode, ConnectionConfig } from '@shared/types'
 import { initLogger, logger } from './utils/logger'
-import { openDatabase, getDatabase, getDatabasePath, closeDatabase } from './database/connection'
-import { runMigrations } from './database/migrations'
-import { seedDatabase } from './database/seed'
-import { authService } from './services/auth.service'
-import { settingsService } from './services/settings.service'
-import { bookImageService } from './services/book-image.service'
-import { backupService } from './services/backup.service'
+import { provisioner } from './database/pg/provision'
+import type { Db } from './database/pg/client'
 import { registerAllIpc } from './ipc'
-import { openFolderPath, restartApp } from './utils/system'
-import type { AppDirs } from './config/paths'
+import type { Services } from './ipc/types'
+import { buildAdminServices } from './services/admin.services'
+import { buildUserServices } from './services/user.services'
+import { migrateSqliteFrom } from './services/migrate-sqlite.service'
 import { IPC } from '../shared/api'
 
 const IMAGE_SCHEME = 'opac-img'
 
-registerPrivilegedSchemes()
-
-function registerPrivilegedSchemes(): void {
-  protocol.registerSchemesAsPrivileged([
-    {
-      scheme: IMAGE_SCHEME,
-      privileges: {
-        standard: true,
-        secure: true,
-        supportFetchAPI: true,
-        stream: true,
-        bypassCSP: false
-      }
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: IMAGE_SCHEME,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+      bypassCSP: false
     }
-  ])
-}
+  }
+])
 
 let mainWindow: BrowserWindow | null = null
+let appServices: Services | null = null
+let adminDb: Db | null = null
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -85,63 +82,24 @@ function broadcastToRenderer(channel: string, payload?: unknown): void {
   }
 }
 
-function buildServices() {
-  const dirs = getAppDirs()
-  const auth = authService(getDatabase)
-  const settings = settingsService(getDatabase)
-  const images = bookImageService(dirs)
+let getConnectionOverride: (() => ConnectionConfig | null) | null = null
 
-  const broadcastSettings = (): void => {
-    const current = settingsService(getDatabase).getAll()
-    broadcastToRenderer(IPC.eventSettingsChanged, current)
-  }
-  const broadcastSession = (): void => {
-    broadcastToRenderer(IPC.eventSessionChanged)
-  }
-  const reloadDatabaseAfterRestore = (): void => {
-    closeDatabase()
-    const db = openDatabase(dirs.dbPath)
-    runMigrations(db)
-    seedDatabase(db, { imagesDir: dirs.imagesDir, isDev: !app.isPackaged })
-    auth.logout()
-    broadcastSettings()
-    broadcastSession()
-    logger.info('database connection reloaded after restore')
-  }
-
-  const backup = backupService(
-    dirs,
-    () => getDatabasePath(),
-    () => {
-      try {
-        getDatabase().pragma('wal_checkpoint(TRUNCATE)')
-      } catch {
-        // ignore
-      }
-    },
-    reloadDatabaseAfterRestore
-  )
-  return {
-    dirs,
-    getDb: getDatabase,
-    auth,
-    settings,
-    images,
-    backup,
-    openPath: openFolderPath,
-    restart: restartApp,
-    isAuthenticated: () => auth.getSession() !== null,
-    broadcastSettings,
-    broadcastSession
-  }
-}
-
-function registerImageProtocol(dirs: AppDirs): void {
-  protocol.handle(IMAGE_SCHEME, (request) => {
+function registerImageProtocol(appMode: AppMode): void {
+  protocol.handle(IMAGE_SCHEME, async (request) => {
     try {
       const url = new URL(request.url)
       const filename = decodeURIComponent(url.pathname.replace(/^\/+/, ''))
-      const fullPath = resolveImagePath(dirs, filename)
+      if (appMode === 'user') {
+        const config = getConnectionOverride?.() ?? null
+        if (!config || !config.token) {
+          return new Response('Not configured', { status: 503 })
+        }
+        const remoteUrl = `http://${config.host.trim().replace(/^https?:\/\//, '')}:${config.port}/api/v1/covers/${encodeURIComponent(filename)}`
+        return net.fetch(remoteUrl, {
+          headers: { Authorization: `Bearer ${config.token}` }
+        })
+      }
+      const fullPath = resolveImagePath(getSystemDirs().imagesDir, filename)
       if (!existsSync(fullPath)) {
         return new Response('Not found', { status: 404 })
       }
@@ -152,31 +110,77 @@ function registerImageProtocol(dirs: AppDirs): void {
   })
 }
 
-async function bootstrap(app: Electron.App): Promise<void> {
-  try {
-    const dirs = getAppDirs()
-    ensureDirs(dirs)
-    initLogger(dirs)
-    registerImageProtocol(dirs)
+async function bootstrapAdmin(): Promise<void> {
+  const dirs = getAppDirs()
+  const systemDirs = getSystemDirs()
+  ensureDirs(dirs)
+  ensureSystemDirs(systemDirs)
+  initLogger({ logsDir: systemDirs.logsDir })
+  registerImageProtocol('admin')
 
-    const db = openDatabase(dirs.dbPath)
-    runMigrations(db)
-    seedDatabase(db, { imagesDir: dirs.imagesDir, isDev: !app.isPackaged })
+  const makeProvisioner = provisioner(systemDirs, {
+    onLog: (line: string) => logger.info(line)
+  })
 
-    const services = buildServices()
-    registerAllIpc(services)
+  const build = buildAdminServices(dirs, systemDirs, makeProvisioner, {
+    broadcastSettings: () => {
+      const settings = appServices?.settings
+      if (!settings) return
+      void settings.getAll().then((current) => {
+        broadcastToRenderer(IPC.eventSettingsChanged, current)
+      })
+    },
+    broadcastSession: () => {
+      broadcastToRenderer(IPC.eventSessionChanged)
+    }
+  })
 
-    await session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
-      const allowed = ['clipboard-sanitized-write', 'clipboard-read']
-      callback(allowed.includes(permission))
+  const { services, db, repo } = await build()
+  appServices = services
+  adminDb = db
+
+  // Opportunistic one-time migration from the legacy SQLite database.
+  const legacySqlitePath = dirs.dbPath
+  if (existsSync(legacySqlitePath)) {
+    const report = await migrateSqliteFrom({
+      db,
+      repo,
+      sqlitePath: legacySqlitePath,
+      imagesDir: systemDirs.imagesDir
     })
-
-    createWindow()
-    logger.info('application started', { version: app.getVersion(), userData: dirs.userData })
-  } catch (err) {
-    logger.error('failed to bootstrap application', err)
-    app.quit()
+    if (report.migrated) {
+      logger.info('legacy SQLite data migrated', { counts: report.counts, warnings: report.warnings })
+    }
   }
+
+  registerAllIpc(services)
+  finalizeBootstrap(dirs)
+}
+
+async function bootstrapUser(): Promise<void> {
+  const dirs = getAppDirs()
+  ensureDirs(dirs)
+  initLogger({ logsDir: dirs.logsDir })
+  registerImageProtocol('user')
+
+  const { services, getConnection } = buildUserServices(dirs)
+  getConnectionOverride = getConnection
+  appServices = services
+  registerAllIpc(services)
+  finalizeBootstrap(dirs)
+}
+
+async function finalizeBootstrap(dirs: { userData: string }): Promise<void> {
+  await session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+    const allowed = ['clipboard-sanitized-write', 'clipboard-read']
+    callback(allowed.includes(permission))
+  })
+  createWindow()
+  logger.info('application started', {
+    version: app.getVersion(),
+    mode: getAppMode(),
+    userData: dirs.userData
+  })
 }
 
 app.on('window-all-closed', () => {
@@ -186,10 +190,9 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
-  try {
-    closeDatabase()
-  } catch {
-    // ignore
+  if (adminDb) {
+    adminDb.end().catch((err) => logger.warn('postgres pool close error', err))
+    adminDb = null
   }
 })
 
@@ -213,7 +216,6 @@ app.whenReady().then(async () => {
       console.error('[smoke] FAILED:', err)
       logger.error('smoke test failed', err)
       try {
-        const { writeFileSync } = await import('node:fs')
         writeFileSync(
           join(process.cwd(), '.smoke-failure.txt'),
           `FAILED ${new Date().toISOString()}\n${err instanceof Error ? err.stack ?? err.message : String(err)}\n`
@@ -225,7 +227,14 @@ app.whenReady().then(async () => {
     }
     return
   }
-  bootstrap(app)
+
+  const mode = getAppMode()
+  logger.info('boot mode', { mode })
+  if (mode === 'admin') {
+    await bootstrapAdmin()
+  } else {
+    await bootstrapUser()
+  }
 })
 
 process.on('uncaughtException', (err) => {

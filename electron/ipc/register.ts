@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import { logger } from '../utils/logger'
 
 export interface IpcContext {
-  isAuthenticated: () => boolean
+  isAuthenticated: () => Promise<boolean>
 }
 
 type Handler<TArgs extends unknown[], TResult> = (...args: TArgs) => TResult | Promise<TResult>
@@ -21,8 +21,11 @@ export function registerIpc<TArgs extends unknown[], TResult>(
   const { requireAuth = false, context } = options ?? {}
   ipcMain.handle(channel, async (_event, ...args) => {
     try {
-      if (requireAuth && context && !context.isAuthenticated()) {
-        return { ok: false, error: 'Not authenticated. Please sign in again.' }
+      if (requireAuth && context) {
+        const authed = await context.isAuthenticated()
+        if (!authed) {
+          return { ok: false, error: 'Not authenticated. Please sign in again.' }
+        }
       }
       const data = await handler(...(args as TArgs))
       return { ok: true, data }

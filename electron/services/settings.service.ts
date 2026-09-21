@@ -1,5 +1,4 @@
-import type { DB } from '../database/connection'
-import { settingsRepository } from '../database/repositories/settings.repository'
+import type { Repositories } from '../database/pg/repositories'
 import type { SettingsMap } from '@shared/types'
 import { logger } from '../utils/logger'
 
@@ -14,37 +13,31 @@ const DEFAULTS: SettingsMap = {
 export const SETTING_KEYS = Object.keys(DEFAULTS) as Array<keyof SettingsMap>
 
 export interface SettingsService {
-  getAll(): SettingsMap
-  get<K extends keyof SettingsMap>(key: K): SettingsMap[K]
-  set(key: keyof SettingsMap, value: string | null): void
+  getAll(): Promise<SettingsMap>
+  set(key: keyof SettingsMap, value: string | null): Promise<void>
 }
 
-export function settingsService(getDb: () => DB): SettingsService {
+export function settingsService(repo: Repositories): SettingsService {
   return {
-    getAll(): SettingsMap {
-      const db = getDb()
-      const repo = settingsRepository(db)
-      const all = repo.getAll()
+    async getAll(): Promise<SettingsMap> {
+      const all = await repo.settings.getAll()
       const result = { ...DEFAULTS }
       for (const key of SETTING_KEYS) {
         if (key in all) {
-          const v = all[key]
+          const raw = all[key]
           if (key === 'theme') {
-            result[key] = (v === 'dark' ? 'dark' : 'light') as SettingsMap['theme']
+            result[key] = (raw === 'dark' ? 'dark' : 'light') as SettingsMap['theme']
+          } else if (key === 'library_logo') {
+            result[key] = typeof raw === 'string' && raw.length > 0 ? raw : null
           } else {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ;(result as any)[key] = v
+            result[key] = (raw ?? '') as SettingsMap[typeof key]
           }
         }
       }
       return result
     },
-    get(key) {
-      return this.getAll()[key]
-    },
-    set(key, value) {
-      const db = getDb()
-      settingsRepository(db).set(key, value)
+    async set(key: keyof SettingsMap, value: string | null): Promise<void> {
+      await repo.settings.set(key, value)
       logger.info('setting updated', { key })
     }
   }

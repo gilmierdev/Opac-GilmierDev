@@ -1,5 +1,7 @@
 import type {
   AdminUser,
+  ApiTokenInfo,
+  AppMode,
   AppPaths,
   AsyncResult,
   AuthorInput,
@@ -14,12 +16,18 @@ import type {
   CategoryInput,
   CategoryListItem,
   ChangePasswordInput,
+  ConnectionConfig,
+  ConnectionStatus,
   CreateAdminInput,
   DashboardStats,
+  DatabaseStatus,
   ImageResult,
+  InstallInfo,
+  NetworkAccessInfo,
   Paginated,
   PublisherInput,
   PublisherListItem,
+  ServerStatus,
   SettingsMap
 } from './types'
 
@@ -27,6 +35,24 @@ export const IPC = {
   appPaths: 'app:paths',
   appOpenPath: 'app:open-path',
   appRestart: 'app:restart',
+  appInstallInfo: 'app:install-info',
+  appMode: 'app:mode',
+
+  connectionGet: 'connection:get',
+  connectionSave: 'connection:save',
+  connectionTest: 'connection:test',
+  connectionReset: 'connection:reset',
+
+  networkStatus: 'network:status',
+  networkStart: 'network:start',
+  networkStop: 'network:stop',
+  networkRestart: 'network:restart',
+  networkTokenInfo: 'network:token-info',
+  networkRegenerateToken: 'network:regenerate-token',
+  networkSetPort: 'network:set-port',
+  networkFirewall: 'network:firewall',
+
+  databaseStatus: 'database:status',
 
   authNeedsSetup: 'auth:needs-setup',
   authSetup: 'auth:setup',
@@ -82,6 +108,30 @@ export interface LibraryApi {
   paths(): Promise<AppPaths>
   openPath(path: string): Promise<void>
   restart(): void
+  installInfo(): Promise<InstallInfo>
+  mode(): Promise<AppMode>
+
+  connection: {
+    get(): Promise<ConnectionConfig | null>
+    save(config: ConnectionConfig): Promise<void>
+    test(config: ConnectionConfig): Promise<ConnectionStatus>
+    reset(): Promise<void>
+  }
+
+  network: {
+    status(): Promise<ServerStatus>
+    start(): Promise<ServerStatus>
+    stop(): Promise<void>
+    restart(): Promise<ServerStatus>
+    tokenInfo(): Promise<ApiTokenInfo>
+    regenerateToken(): Promise<{ token: string; info: ApiTokenInfo }>
+    setPort(port: number): Promise<ServerStatus>
+    firewall(): Promise<NetworkAccessInfo>
+  }
+
+  database: {
+    status(): Promise<DatabaseStatus>
+  }
 
   auth: {
     needsSetup(): Promise<boolean>

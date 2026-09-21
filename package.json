@@ -13,14 +13,20 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "icon": "node scripts/generate-icon.mjs",
+    "start": "electron .",
     "smoke": "electron . --smoke-test --smoke-dir=.smoke-tmp",
     "build": "npm run typecheck && electron-vite build",
     "build:win": "npm run build && electron-builder --win",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
+    "@fastify/rate-limit": "^11.2.0",
+    "@types/pg": "^8.23.1",
     "bcryptjs": "^3.0.2",
-    "better-sqlite3": "^13.0.3"
+    "better-sqlite3": "^13.0.3",
+    "embedded-postgres": "^18.4.0-beta.17",
+    "fastify": "^5.12.5",
+    "pg": "^8.23.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

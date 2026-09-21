@@ -1,159 +1,295 @@
 import { dialog } from 'electron'
-import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+  readFileSync
+} from 'node:fs'
 import { join } from 'node:path'
-import Database from 'better-sqlite3'
-import type { AppDirs } from '../config/paths'
+import type { Db } from '../database/pg/client'
+import { toIso } from '../database/pg/repositories/utils'
 import { logger } from '../utils/logger'
+import type { BackupFile, BackupRestoreResult } from '@shared/types'
+import { resolveImagePath } from '../config/paths'
 
-const REQUIRED_TABLES = ['schema_migrations', 'authors', 'categories', 'publishers', 'books', 'admin_users', 'borrowings', 'settings']
+const BACKUP_TABLES = [
+  'authors',
+  'categories',
+  'publishers',
+  'books',
+  'admin_users',
+  'borrowings',
+  'settings',
+  'schema_migrations'
+] as const
 
-export interface BackupResult {
-  filename: string
-  path: string
-  size: number
-  createdAt: string
+const BACKUP_SUFFIX = '.opacbk'
+const FORMAT = 'opac-library-backup'
+const FORMAT_VERSION = 1
+
+export interface BackupServiceDeps {
+  db: Db
+  imagesDir: string
+  backupsDir: string
+  getSchemaVersion: () => Promise<number>
+  getLibraryName: () => Promise<string>
+  afterRestore?: () => void
 }
 
 export interface BackupService {
-  create(): Promise<BackupResult>
-  list(): BackupResult[]
-  restoreFromFile(filename: string): Promise<void>
-  pickAndRestore(): Promise<{ restored: boolean; message?: string }>
+  create(): Promise<BackupFile>
+  list(): Promise<BackupFile[]>
+  restore(filename: string): Promise<void>
+  pickAndRestore(): Promise<BackupRestoreResult>
 }
 
-export function backupService(
-  dirs: AppDirs,
-  getDbPath: () => string | null,
-  checkpoint: () => void,
-  afterRestore?: () => void
-): BackupService {
-  function validateDatabase(filePath: string): string | null {
-    try {
-      if (!existsSync(filePath)) return 'File does not exist'
-      const candidate = new Database(filePath, { readonly: true, fileMustExist: true })
+function safeBasename(name: string): string {
+  const safe = name.replaceAll('\\', '/').split('/').pop() ?? ''
+  if (!safe || /\.\./.test(safe) || /[:*?"<>|]/.test(safe)) {
+    throw new Error('Invalid backup name')
+  }
+  return safe
+}
+
+function stamp(): string {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
+}
+
+function folderSize(dir: string): number {
+  if (!existsSync(dir)) return 0
+  let total = 0
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry)
+    total += statSync(full).size
+  }
+  return total
+}
+
+export function backupService(deps: BackupServiceDeps): BackupService {
+  async function dumpData(): Promise<Record<string, unknown[]>> {
+    const out: Record<string, unknown[]> = {}
+    for (const table of BACKUP_TABLES) {
+      const rows = await deps.db.many<Record<string, unknown>>(`SELECT * FROM ${table}`)
+      out[table] = rows.map((row) => {
+        const clean: Record<string, unknown> = {}
+        for (const [key, value] of Object.entries(row)) {
+          clean[key] = value instanceof Date ? value.toISOString() : value
+        }
+        return clean
+      })
+    }
+    return out
+  }
+
+  async function createBackupFolder(): Promise<BackupFile> {
+    mkdirSync(deps.backupsDir, { recursive: true })
+    const createdAt = new Date().toISOString()
+    const folderName = `opac-backup-${stamp()}${BACKUP_SUFFIX}`
+    const folder = join(deps.backupsDir, folderName)
+    mkdirSync(folder, { recursive: true })
+    const coversDir = join(folder, 'covers')
+    mkdirSync(coversDir, { recursive: true })
+
+    const [data, schemaVersion, libraryName] = await Promise.all([
+      dumpData(),
+      deps.getSchemaVersion(),
+      deps.getLibraryName()
+    ])
+
+    const coverFiles = new Set<string>()
+    for (const book of data.books as Array<{ cover_image?: string | null }>) {
+      if (book.cover_image) coverFiles.add(book.cover_image)
+    }
+    for (const filename of coverFiles) {
       try {
-        const integrity = candidate.pragma('integrity_check') as Array<{ integrity_check: string }>
-        if (!integrity || integrity[0]?.integrity_check !== 'ok') {
-          return 'The selected file is not a valid database'
+        const source = resolveImagePath(deps.imagesDir, filename)
+        if (existsSync(source)) {
+          copyFileSync(source, join(coversDir, filename))
         }
-        const tables = (candidate
-          .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
-          .all() as Array<{ name: string }>).map((t) => t.name)
-        const missing = REQUIRED_TABLES.filter((t) => !tables.includes(t))
-        if (missing.length > 0) {
-          return `The selected file is missing required tables: ${missing.join(', ')}`
-        }
-        return null
-      } finally {
-        candidate.close()
+      } catch {
+        // skip unreadable cover
       }
-    } catch (err) {
-      logger.error('backup validation failed', err)
-      return 'The selected file is not a valid database'
+    }
+
+    writeFileSync(
+      join(folder, 'manifest.json'),
+      JSON.stringify(
+        {
+          format: FORMAT,
+          formatVersion: FORMAT_VERSION,
+          createdAt,
+          schemaVersion,
+          libraryName,
+          appVersion: process.env.npm_package_version ?? '1.0.0'
+        },
+        null,
+        2
+      ),
+      'utf8'
+    )
+    writeFileSync(join(folder, 'data.json'), JSON.stringify(data), 'utf8')
+
+    logger.info('backup created', { folder: folderName, size: folderSize(folder) })
+    return {
+      filename: folderName,
+      path: folder,
+      size: folderSize(folder),
+      createdAt
     }
   }
 
-  return {
-    async create() {
-      const dbPath = getDbPath()
-      if (!dbPath || !existsSync(dbPath)) {
-        throw new Error('Database not found')
+  function readBackup(folder: string): {
+    manifest: { format: string; formatVersion: number; schemaVersion: number }
+    data: Record<string, unknown[]>
+  } {
+    const manifestFile = join(folder, 'manifest.json')
+    const dataFile = join(folder, 'data.json')
+    if (!existsSync(manifestFile) || !existsSync(dataFile)) {
+      throw new Error('The selected backup is missing required files')
+    }
+    const manifest = JSON.parse(readFileSync(manifestFile, 'utf8')) as {
+      format: string
+      formatVersion: number
+      schemaVersion: number
+    }
+    if (manifest.format !== FORMAT || manifest.formatVersion !== FORMAT_VERSION) {
+      throw new Error('This backup was created by an incompatible version')
+    }
+    const data = JSON.parse(readFileSync(dataFile, 'utf8')) as Record<string, unknown[]>
+    for (const table of BACKUP_TABLES) {
+      if (!Array.isArray(data[table])) {
+        throw new Error(`The backup is missing table data: ${table}`)
       }
-      try {
-        checkpoint()
-      } catch {
-        // checkpoint is best-effort
-      }
-      mkdirSync(dirs.backupsDir, { recursive: true })
-      const stamp = new Date()
-      const pad = (n: number) => String(n).padStart(2, '0')
-      const filename = `opac-backup-${stamp.getFullYear()}-${pad(stamp.getMonth() + 1)}-${pad(stamp.getDate())}-${pad(stamp.getHours())}-${pad(stamp.getMinutes())}-${pad(stamp.getSeconds())}.db`
-      const dest = join(dirs.backupsDir, filename)
-      copyFileSync(dbPath, dest)
-      const stat = statSync(dest)
-      logger.info('backup created', { filename, size: stat.size })
-      return {
-        filename,
-        path: dest,
-        size: stat.size,
-        createdAt: new Date().toISOString()
-      }
-    },
+    }
+    return { manifest, data }
+  }
 
-    list() {
-      if (!existsSync(dirs.backupsDir)) return []
-      const files = readdirSync(dirs.backupsDir)
-        .filter((f) => f.endsWith('.db'))
-        .map((filename) => {
-          const full = join(dirs.backupsDir, filename)
+  async function applyRestore(folder: string): Promise<void> {
+    const { data } = readBackup(folder)
+
+    await deps.db.tx(async (tx) => {
+      const tablesToClear = [...BACKUP_TABLES].sort(
+        (a, b) => orderOf(b) - orderOf(a)
+      )
+      for (const table of tablesToClear) {
+        await tx.query(`TRUNCATE TABLE ${table} RESTART IDENTITY CASCADE`)
+      }
+
+      for (const table of BACKUP_TABLES) {
+        const rows = data[table]
+        if (!rows.length) continue
+        const columns = Object.keys(rows[0] as Record<string, unknown>)
+        const colList = columns.join(', ')
+        for (const row of rows as Array<Record<string, unknown>>) {
+          const values = columns.map((c) => row[c] ?? null)
+          const placeholders = values.map((_, i) => `$${i + 1}`).join(', ')
+          await tx.query(`INSERT INTO ${table} (${colList}) VALUES (${placeholders})`, values)
+        }
+      }
+    })
+
+    const coversDir = join(folder, 'covers')
+    if (existsSync(coversDir)) {
+      mkdirSync(deps.imagesDir, { recursive: true })
+      for (const filename of readdirSync(coversDir)) {
+        try {
+          const source = join(coversDir, filename)
+          const dest = resolveImagePath(deps.imagesDir, filename)
+          copyFileSync(source, dest)
+        } catch {
+          // skip unreadable cover
+        }
+      }
+    }
+  }
+
+  function orderOf(table: string): number {
+    return BACKUP_TABLES.indexOf(table as (typeof BACKUP_TABLES)[number])
+  }
+
+  return {
+    async create(): Promise<BackupFile> {
+      return createBackupFolder()
+    },
+    async list(): Promise<BackupFile[]> {
+      if (!existsSync(deps.backupsDir)) return []
+      const entries = readdirSync(deps.backupsDir)
+        .map((name) => {
+          const full = join(deps.backupsDir, name)
           const stat = statSync(full)
+          return { name, full, isDir: stat.isDirectory(), stat }
+        })
+        .filter((e) => e.isDir && e.name.endsWith(BACKUP_SUFFIX))
+        .map((e) => {
+          let createdAt: string
+          try {
+            const manifest = JSON.parse(readFileSync(join(e.full, 'manifest.json'), 'utf8')) as {
+              createdAt?: string
+            }
+            createdAt = manifest.createdAt ?? toIso(e.stat.mtime)
+          } catch {
+            createdAt = toIso(e.stat.mtime)
+          }
+          const size = folderSize(e.full)
           return {
-            filename,
-            path: full,
-            size: stat.size,
-            createdAt: stat.mtime.toISOString()
+            filename: e.name,
+            path: e.full,
+            size,
+            createdAt
           }
         })
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      return files
+      return entries
     },
+    async restore(filename: string): Promise<void> {
+      const safe = safeBasename(filename)
+      if (!safe.endsWith(BACKUP_SUFFIX)) throw new Error('Invalid backup file')
+      const source = join(deps.backupsDir, safe)
+      if (!existsSync(source)) throw new Error('Backup not found')
 
-    async restoreFromFile(filename: string) {
-      const safeName = filename.replaceAll('\\', '/').split('/').pop() ?? ''
-      if (!safeName || safeName !== filename || /\.\./.test(safeName)) {
-        throw new Error('Invalid backup filename')
-      }
-      const source = join(dirs.backupsDir, safeName)
-      const error = validateDatabase(source)
-      if (error) {
-        throw new Error(error)
-      }
-      const dbPath = getDbPath()
-      if (!dbPath) {
-        throw new Error('Database not found')
-      }
-      mkdirSync(dirs.backupsDir, { recursive: true })
-      const backupBeforeRestore = join(
-        dirs.backupsDir,
-        `pre-restore-${Date.now()}.db`
+      // Pre-restore safety snapshot of the current database.
+      mkdirSync(deps.backupsDir, { recursive: true })
+      const pre = `pre-restore-${Date.now()}${BACKUP_SUFFIX}`
+      mkdirSync(join(deps.backupsDir, pre), { recursive: true })
+      const snapshot = await dumpData()
+      writeFileSync(join(deps.backupsDir, pre, 'data.json'), JSON.stringify(snapshot), 'utf8')
+      writeFileSync(
+        join(deps.backupsDir, pre, 'manifest.json'),
+        JSON.stringify({ format: FORMAT, formatVersion: FORMAT_VERSION, createdAt: new Date().toISOString() }),
+        'utf8'
       )
-      if (existsSync(dbPath)) {
-        copyFileSync(dbPath, backupBeforeRestore)
-      }
-      copyFileSync(source, dbPath)
-      logger.info('database restored', { source: safeName })
-      afterRestore?.()
-    },
 
-    async pickAndRestore() {
+      await applyRestore(source)
+      logger.info('database restored from backup', { source: safe })
+      deps.afterRestore?.()
+    },
+    async pickAndRestore(): Promise<BackupRestoreResult> {
       const result = await dialog.showOpenDialog({
-        title: 'Select Database Backup to Restore',
-        properties: ['openFile'],
-        filters: [
-          { name: 'Database Backup', extensions: ['db', 'sqlite', 'sqlite3', 'bak', '*'] },
-          { name: 'All Files', extensions: ['*'] }
-        ]
+        title: 'Select Backup Folder to Restore',
+        properties: ['openDirectory']
       })
       if (result.canceled || result.filePaths.length === 0) {
         return { restored: false }
       }
       const picked = result.filePaths[0]
-      const error = validateDatabase(picked)
-      if (error) {
-        return { restored: false, message: error }
+      try {
+        readBackup(picked)
+      } catch (err) {
+        return { restored: false, message: err instanceof Error ? err.message : 'Invalid backup' }
       }
-      const dbPath = getDbPath()
-      if (!dbPath) {
-        return { restored: false, message: 'Database not found' }
+      try {
+        await applyRestore(picked)
+      } catch (err) {
+        logger.error('restore failed', err)
+        return { restored: false, message: 'Restore failed. The database was not changed.' }
       }
-      mkdirSync(dirs.backupsDir, { recursive: true })
-      const backupBeforeRestore = join(dirs.backupsDir, `pre-restore-${Date.now()}.db`)
-      if (existsSync(dbPath)) {
-        copyFileSync(dbPath, backupBeforeRestore)
-      }
-      copyFileSync(picked, dbPath)
-      logger.info('database restored from file picker', { source: picked })
-      afterRestore?.()
+      logger.info('database restored from picked folder', { source: picked })
+      deps.afterRestore?.()
       return { restored: true }
     }
   }

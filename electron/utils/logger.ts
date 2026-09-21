@@ -1,6 +1,5 @@
 import { mkdirSync, appendFileSync, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import type { AppDirs } from '../config/paths'
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
@@ -8,7 +7,7 @@ const MAX_LOG_BYTES = 5 * 1024 * 1024
 
 let logFile: string | null = null
 
-export function initLogger(dirs: AppDirs): void {
+export function initLogger(dirs: { logsDir: string }): void {
   logFile = join(dirs.logsDir, 'app.log')
   if (!existsSync(dirs.logsDir)) {
     mkdirSync(dirs.logsDir, { recursive: true })

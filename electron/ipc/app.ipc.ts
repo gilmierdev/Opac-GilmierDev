@@ -1,10 +1,10 @@
 import { app } from 'electron'
 import { IPC } from '@shared/api'
-import type { AppPaths } from '@shared/types'
+import type { AppMode, AppPaths } from '@shared/types'
 import { registerIpc } from './register'
 import type { Services } from './types'
 
-export function registerAppIpc({ dirs, openPath, restart, isAuthenticated }: Services): void {
+export function registerAppIpc({ dirs, installInfo, mode, openPath, restart, isAuthenticated }: Services): void {
   const ctx = { isAuthenticated }
 
   registerIpc(
@@ -26,6 +26,8 @@ export function registerAppIpc({ dirs, openPath, restart, isAuthenticated }: Ser
     }),
     { context: ctx }
   )
+  registerIpc(IPC.appInstallInfo, () => installInfo(), { context: ctx })
+  registerIpc(IPC.appMode, (): Promise<AppMode> => mode(), { context: ctx })
   registerIpc(
     IPC.appOpenPath,
     (path: string) => {

@@ -1,6 +1,11 @@
 # OPAC Library System
 
-A production-ready, fully offline **OPAC (Online Public Access Catalog) Library Desktop Application** for Windows. Built with Electron, React, TypeScript, and SQLite.
+A production-ready, **OPAC (Online Public Access Catalog) Library Desktop Application** for Windows. Built with Electron, React, TypeScript, and an embedded PostgreSQL database.
+
+The installer offers two install locations/editions:
+
+- **Admin** — installs per-machine (`Program Files`), hosts the embedded PostgreSQL database and the LAN HTTP API, and provides the full management UI.
+- **User** — installs per-user, runs as a read-only catalog client connecting over the network to an Admin install (no database, no admin screens).
 
 ## Features
 
@@ -11,18 +16,19 @@ A production-ready, fully offline **OPAC (Online Public Access Catalog) Library 
 - Pagination throughout
 
 **Admin management** (password-protected)
-- Dashboard with statistics (books, copies, borrowings, overdue)
+- Dashboard with statistics (books, copies, borrowings, overdue) and network server status
 - Full CRUD for books (with cover image upload), authors, categories, and publishers
 - Archiving instead of hard-deletes (soft deletion)
 - Borrowing records: check out, mark returned, overdue tracking
 - Library settings: name, contact info, logo, theme, backups
 - First-run administrator setup (bcrypt-hashed passwords)
+- Network page: start/stop the server, change the API port, regenerate the connection token, copy firewall/LAN instructions
 
 **Data & security**
-- 100% local: SQLite database (`better-sqlite3`) stored under the user's AppData
-- Backups: create on demand, restore from file, with automatic pre-restore snapshot
-- Search index via SQLite FTS5
-- Hardened Electron profile: context isolation, sandbox, no node integration, strict CSP
+- Managed embedded PostgreSQL (`@embedded-postgres`), loopback-only on the Admin machine
+- Legacy SQLite databases from previous installs are migrated automatically on first Admin run
+- User machines store only their connection settings — no library data
+- Hardened Electron profile: context isolation, sandbox, no node integration, strict CSP; covers served via a private `opac-img://` scheme
 
 ## Tech stack
 
@@ -30,16 +36,17 @@ A production-ready, fully offline **OPAC (Online Public Access Catalog) Library 
 - React 19, React Router 7, Zustand, lucide-react
 - Tailwind CSS v4
 - TypeScript 5.9
-- better-sqlite3, bcryptjs
+- Fastify 5 (HTTP API, token + rate limited), pg, embedded-postgres, bcryptjs
 
 ## Getting started
 
 ```bash
-npm install          # installs deps; postinstall rebuilds better-sqlite3 for Electron
+npm install          # installs deps; postinstall rebuilds native modules for Electron
 npm run dev          # run in development (hot reload)
 npm run typecheck    # TS typecheck (main + renderer)
-npm run smoke        # headless main-process + database smoke test (in .smoke-tmp)
+npm run smoke        # headless main-process + PostgreSQL smoke test (in .smoke-tmp)
 npm run build        # typecheck + production build into out/
+npm run start        # run the production build locally (build first)
 npm run preview      # run the production build locally
 npm run icon         # regenerate build/icon.png + build/icon.ico
 npm run build:win    # build + package Windows NSIS installer into release/
@@ -49,16 +56,26 @@ The Windows installer is written to `release/OPAC-Library-System-Setup-<version>
 
 > Note: on Windows, the Electron child processes don't attach their console output to the parent terminal. `npm run smoke` reports success/failure via its exit code; run `npm run build` first so `out/` is up to date.
 
-## Local data
+## Install modes
 
-All user data lives under `%APPDATA%\opac-library-system\`:
+The installer asks whether to install as **Admin** or **User** and writes the choice to `%PROGRAMDATA%\OpacLibrarySystem\install.json` (the uninstaller removes it). Admin mode additionally writes a per-user copy under `%APPDATA%\opac-library-system\`.
 
-| Path | Purpose |
+The mode can be overridden at launch:
+
+- CLI flag: `electron . --mode=user` / `--mode=admin`
+- Environment: `OPAC_MODE=user`
+
+A User install reads its cached connection on startup and falls back to the connect page (`/connect`) where you enter the Admin server's address, port, and the connection token shown on the Admin **Network Server** page.
+
+## Data & ports
+
+| Item | Value |
 |---|---|
-| `data/opac.db` | SQLite database (migrations run automatically) |
-| `book-images/` | Uploaded / seeded cover images |
-| `backups/` | Backup snapshots (`*.db`) |
-| `logs/` | Application log files |
+| Admin data root | `%PROGRAMDATA%\OpacLibrarySystem` |
+| Legacy per-user data | `%APPDATA%\opac-library-system\data` (migrated on first Admin run) |
+| Managed PostgreSQL | loopback only, port `54321`, app role `opac` / db `opac` |
+| HTTP API port | `47821` (changeable in Network page) |
+| Auth | Admin: password login. User client / browser: bearer token (`Authorization: Bearer <token>`) |
 
 ## Project structure
 
@@ -66,8 +83,10 @@ All user data lives under `%APPDATA%\opac-library-system\`:
 electron/
   main.ts                     # app bootstrap, window, IPC wiring, smoke mode
   smoke.ts                    # headless DB smoke test
-  services/                   # auth, backups, book images, settings, ipc
-  database/                   # connection, migrations, seed, repositories
+  config/                     # mode detection + install.json, system/user dirs
+  services/                   # auth, backups, book images, settings, ipc, admin services
+  database/pg/                # provisioner, repositories, migrations, schema
+  database/migrate-sqlite.service.ts  # legacy SQLite -> PostgreSQL migration
   utils/                      # logger, paths
 preload/
   index.ts                    # typed, secured preload bridge (window.api)
@@ -80,11 +99,14 @@ shared/
 scripts/
   generate-icon.mjs           # zero-dependency app icon generator
 electron-builder.yml          # NSIS packaging config
+build/
+  installer.nsh               # NSIS edition-choice page + install.json hooks
 ```
 
 ## Architecture notes
 
 - The renderer talks to the main process only through a single typed IPC bridge (`window.api`) with a `{ ok, data }` envelope; errors are mapped to an `OpacError` variant.
 - Admin-only operations are gated in the main process via an in-memory session (`authService`), so the UI is never trusted as the security boundary.
-- Book cover images are served through a private `opac-img://` scheme allowed by the renderer CSP.
-- Migrations are versioned (`schema_migrations`) and idempotent; dev-only seed data (10 books / 5 authors / 5 categories / 3 publishers) is generated when no data exists and `NODE_ENV !== 'production'`.
+- In User mode the app talks directly to the remote Admin HTTP API; admin routes are not registered in the renderer.
+- Book cover images are served through a private `opac-img://` scheme allowed by the renderer CSP (local files in Admin mode, proxied over HTTP in User mode).
+- Migrations are versioned (`schema_migrations`) and idempotent.

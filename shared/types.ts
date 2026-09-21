@@ -230,3 +230,84 @@ export interface AsyncResult<T> {
   data?: T
   error?: string
 }
+
+// ---------------------------------------------------------------------------
+// Multi-machine (Admin / User) architecture types
+// ---------------------------------------------------------------------------
+
+export type AppMode = 'admin' | 'user'
+
+export interface InstallInfo {
+  mode: AppMode
+  dataDir: string
+  legacySqlitePath: string | null
+  postgres: {
+    managed: boolean
+    port: number
+    database: string
+  }
+  apiPort: number
+}
+
+export interface ConnectionConfig {
+  host: string
+  port: number
+  token: string
+}
+
+export interface ConnectionStatus {
+  ok: boolean
+  library_name?: string
+  library_address?: string
+  contact_info?: string
+  api_version?: string
+  error?: string
+}
+
+export interface PublicLibraryInfo {
+  name: string
+  logo: string | null
+  address: string
+  contact_info: string
+  api_version: string
+}
+
+export interface ApiTokenInfo {
+  configured: boolean
+  label: string
+  created_at: string | null
+  last_used_at: string | null
+}
+
+export interface ServerStatus {
+  running: boolean
+  library: string
+  databaseConnected: boolean
+  host: string
+  lanAddresses: string[]
+  apiPort: number
+  apiVersion: string
+  connectedUsers: number
+}
+
+export interface NetworkAccessInfo {
+  accessTokenConfigured: boolean
+  tokenLabel: string
+  suggestedFirewallCommand: string
+}
+
+export interface BackupCreateInput {
+  location?: string | null
+}
+
+export interface BackupRestoreResult {
+  restored: boolean
+  message?: string
+}
+
+export interface DatabaseStatus {
+  connected: boolean
+  version: string | null
+  schemaVersion: number
+  libraryName: string
+}

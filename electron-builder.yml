@@ -13,6 +13,7 @@ files:
 
 asarUnpack:
   - node_modules/better-sqlite3/**
+  - node_modules/@embedded-postgres/**
 
 win:
   icon: build/icon.ico
@@ -22,9 +23,9 @@ win:
         - x64
 
 nsis:
-  oneClick: true
-  perMachine: false
-  allowToChangeInstallationDirectory: false
+  oneClick: false
+  perMachine: true
+  allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: OPAC Library System
@@ -32,6 +33,7 @@ nsis:
   uninstallDisplayName: OPAC Library System
   installerIcon: build/icon.ico
   uninstallerIcon: build/icon.ico
+  include: build/installer.nsh
   deleteAppDataOnUninstall: false
 
 npmRebuild: false

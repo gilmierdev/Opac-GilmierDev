@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { LibraryBig, Lock, X } from 'lucide-react'
+import { LibraryBig, Lock, Server, X } from 'lucide-react'
 import { useAppStore } from '../stores/app'
-import { imageUrl } from '../lib/utils'
+import { imageUrl, serverLabel } from '../lib/utils'
 
 interface PublicLayoutProps {
   children: ReactNode
@@ -12,8 +12,11 @@ interface PublicLayoutProps {
 
 export default function PublicLayout({ children, showBack = false }: PublicLayoutProps) {
   const settings = useAppStore((s) => s.settings)
+  const mode = useAppStore((s) => s.mode)
+  const connection = useAppStore((s) => s.connection)
   const logo = imageUrl(settings.library_logo)
   const location = useLocation()
+  const isUser = mode === 'user'
 
   return (
     <div className="flex min-h-screen flex-col bg-app">
@@ -46,14 +49,24 @@ export default function PublicLayout({ children, showBack = false }: PublicLayou
                 <X className="mr-1 h-3.5 w-3.5" /> Back
               </button>
             )}
-            <Link
-              to="/admin/login"
-              state={{ from: location.pathname }}
-              className="ring-focus inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-surface px-3 py-2 text-xs font-medium text-foreground hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
-            >
-              <Lock className="h-3.5 w-3.5" />
-              Admin Login
-            </Link>
+            {isUser ? (
+              <Link
+                to="/connect"
+                className="ring-focus inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-surface px-3 py-2 text-xs font-medium text-foreground hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
+              >
+                <Server className="h-3.5 w-3.5" />
+                {connection ? serverLabel(connection.host, connection.port) : 'Connect'}
+              </Link>
+            ) : (
+              <Link
+                to="/admin/login"
+                state={{ from: location.pathname }}
+                className="ring-focus inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-surface px-3 py-2 text-xs font-medium text-foreground hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
+              >
+                <Lock className="h-3.5 w-3.5" />
+                Admin Login
+              </Link>
+            )}
           </div>
         </div>
       </header>

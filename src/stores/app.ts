@@ -1,15 +1,21 @@
 import { create } from 'zustand'
-import type { AdminUser, SettingsMap, AppPaths } from '@shared/types'
+import type { AdminUser, SettingsMap, AppPaths, AppMode, InstallInfo, ConnectionConfig } from '@shared/types'
 
 interface AppState {
   user: AdminUser | null
   settings: SettingsMap
   paths: AppPaths | null
+  mode: AppMode | null
+  installInfo: InstallInfo | null
+  connection: ConnectionConfig | null
   ready: boolean
   initialized: boolean
   setUser: (user: AdminUser | null) => void
   setSettings: (settings: SettingsMap) => void
   setPaths: (paths: AppPaths) => void
+  setMode: (mode: AppMode) => void
+  setInstallInfo: (info: InstallInfo) => void
+  setConnection: (connection: ConnectionConfig | null) => void
   setReady: (ready: boolean) => void
   setInitialized: (value: boolean) => void
 }
@@ -26,11 +32,17 @@ export const useAppStore = create<AppState>((set) => ({
   user: null,
   settings: DEFAULT_SETTINGS,
   paths: null,
+  mode: null,
+  installInfo: null,
+  connection: null,
   ready: false,
   initialized: false,
   setUser: (user) => set({ user }),
   setSettings: (settings) => set({ settings }),
   setPaths: (paths) => set({ paths }),
+  setMode: (mode) => set({ mode }),
+  setInstallInfo: (info) => set({ installInfo: info }),
+  setConnection: (connection) => set({ connection }),
   setReady: (ready) => set({ ready }),
   setInitialized: (value) => set({ initialized: value })
 }))
@@ -47,20 +59,36 @@ export function applyTheme(theme: 'light' | 'dark'): void {
 export async function bootstrapApp(): Promise<void> {
   const store = useAppStore.getState()
   try {
-    const paths = await window.api.paths()
+    const [paths, mode, installInfo] = await Promise.all([
+      window.api.paths(),
+      window.api.mode(),
+      window.api.installInfo()
+    ])
     store.setPaths(paths)
-    const session = await window.api.auth.session()
-    store.setUser(session)
-    const settings = await window.api.settings.getAll()
-    store.setSettings(settings)
-    applyTheme(settings.theme)
+    store.setMode(mode)
+    store.setInstallInfo(installInfo)
 
-    window.api.onSessionChanged(() => {
-      void (async () => {
-        const s = await window.api.auth.session()
-        useAppStore.getState().setUser(s)
-      })()
-    })
+    if (mode === 'user') {
+      const connection = await window.api.connection.get()
+      store.setConnection(connection)
+      const settings = await window.api.settings.getAll()
+      store.setSettings(settings)
+      applyTheme(settings.theme)
+    } else {
+      const session = await window.api.auth.session()
+      store.setUser(session)
+      const settings = await window.api.settings.getAll()
+      store.setSettings(settings)
+      applyTheme(settings.theme)
+
+      window.api.onSessionChanged(() => {
+        void (async () => {
+          const s = await window.api.auth.session()
+          useAppStore.getState().setUser(s)
+        })()
+      })
+    }
+
     window.api.onSettingsChanged((next) => {
       if (next) {
         useAppStore.getState().setSettings(next)

@@ -1,19 +1,22 @@
 import { IPC } from '@shared/api'
 import type { CreateAdminInput, ChangePasswordInput } from '@shared/types'
 import { registerIpc } from './register'
+import { requireService } from './util'
 import type { Services } from './types'
 
 export function registerAuthIpc({ auth, isAuthenticated, broadcastSession }: Services): void {
   const ctx = { isAuthenticated }
+  const svc = requireService(auth, 'Authentication')
 
-  registerIpc(IPC.authNeedsSetup, () => auth.needsSetup())
+  registerIpc(IPC.authNeedsSetup, () => svc.needsSetup(), { context: ctx })
   registerIpc(
     IPC.authSetup,
     (input: CreateAdminInput) => {
       validateCreate(input)
-      const user = auth.setup(input)
-      broadcastSession()
-      return user
+      return svc.setup(input).then((user) => {
+        void broadcastSession()
+        return user
+      })
     },
     { context: ctx }
   )
@@ -23,25 +26,22 @@ export function registerAuthIpc({ auth, isAuthenticated, broadcastSession }: Ser
       if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
         throw new Error('Username and password are required')
       }
-      const user = auth.login(username, password)
-      broadcastSession()
-      return user
+      return svc.login(username, password).then((user) => {
+        void broadcastSession()
+        return user
+      })
     },
     { context: ctx }
   )
   registerIpc(
     IPC.authLogout,
-    () => {
-      auth.logout()
-      broadcastSession()
-    },
+    () =>
+      svc.logout().then(() => {
+        void broadcastSession()
+      }),
     { context: ctx, requireAuth: true }
   )
-  registerIpc(
-    IPC.authSession,
-    () => auth.getSession(),
-    { context: ctx }
-  )
+  registerIpc(IPC.authSession, () => svc.getSession(), { context: ctx })
   registerIpc(
     IPC.authChangePassword,
     (input: ChangePasswordInput) => {
@@ -49,7 +49,7 @@ export function registerAuthIpc({ auth, isAuthenticated, broadcastSession }: Ser
       if (typeof input.currentPassword !== 'string' || typeof input.newPassword !== 'string') {
         throw new Error('Invalid request')
       }
-      return auth.changePassword(input.currentPassword, input.newPassword)
+      return svc.changePassword(input.currentPassword, input.newPassword)
     },
     { context: ctx, requireAuth: true }
   )

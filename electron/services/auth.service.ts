@@ -1,39 +1,33 @@
 import bcrypt from 'bcryptjs'
-import type { DB } from '../database/connection'
-import { usersRepository } from '../database/repositories/users.repository'
+import type { Repositories } from '../database/pg/repositories'
 import type { AdminUser, CreateAdminInput } from '@shared/types'
 import { logger } from '../utils/logger'
 
 const SALT_ROUNDS = 12
-
-export interface SessionInfo {
-  user: AdminUser
-  expiresAt: number
-}
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000
 
 export interface AuthService {
-  needsSetup(): boolean
-  setup(input: CreateAdminInput): AdminUser
-  login(username: string, password: string): AdminUser
-  logout(): void
-  getSession(): AdminUser | null
-  changePassword(currentPassword: string, newPassword: string): void
+  needsSetup(): Promise<boolean>
+  setup(input: CreateAdminInput): Promise<AdminUser>
+  login(username: string, password: string): Promise<AdminUser>
+  logout(): Promise<void>
+  getSession(): Promise<AdminUser | null>
+  isAuthenticated(): Promise<boolean>
+  changePassword(currentPassword: string, newPassword: string): Promise<void>
   validatePasswordStrength(password: string): string | null
 }
 
-export function authService(getDb: () => DB): AuthService {
+export function authService(repo: Repositories): AuthService {
   let sessionUserId: number | null = null
+  let sessionExpiresAt = 0
 
   return {
-    needsSetup(): boolean {
-      const db = getDb()
-      return !usersRepository(db).hasAdmin()
+    async needsSetup(): Promise<boolean> {
+      return !(await repo.users.hasAdmin())
     },
 
-    setup(input: CreateAdminInput): AdminUser {
-      const db = getDb()
-      const repo = usersRepository(db)
-      if (repo.hasAdmin()) {
+    async setup(input: CreateAdminInput): Promise<AdminUser> {
+      if (await repo.users.hasAdmin()) {
         throw new Error('An administrator account already exists')
       }
       const username = input.username.trim()
@@ -43,73 +37,64 @@ export function authService(getDb: () => DB): AuthService {
       if (!input.password || input.password.length < 8) {
         throw new Error('Password must be at least 8 characters')
       }
-      const passwordHash = bcrypt.hashSync(input.password, SALT_ROUNDS)
-      const user = repo.createFirstAdmin({
+      const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS)
+      const user = await repo.users.createFirstAdmin({
         username,
         passwordHash,
         full_name: input.full_name?.trim() || null
       })
       sessionUserId = user.id
+      sessionExpiresAt = Date.now() + SESSION_TTL_MS
       logger.info('administrator account created', { username })
       return user
     },
 
-    login(username: string, password: string): AdminUser {
-      const db = getDb()
+    async login(username: string, password: string): Promise<AdminUser> {
       const trimmed = username.trim()
-      const user = usersRepository(db).findByUsername(trimmed)
-      if (!user) {
+      const match = await repo.users.findByUsername(trimmed)
+      if (!match) {
         throw new Error('Invalid username or password')
       }
-      const row = db
-        .prepare('SELECT id, username, full_name, password_hash, created_at FROM admin_users WHERE id = ?')
-        .get(user.id) as {
-        id: number
-        username: string
-        full_name: string | null
-        password_hash: string
-        created_at: string
-      }
-      if (!bcrypt.compareSync(password, row.password_hash)) {
+      const storedHash = await repo.users.getPasswordHash(match.id)
+      if (!storedHash || !bcrypt.compareSync(password, storedHash)) {
         throw new Error('Invalid username or password')
       }
-      sessionUserId = row.id
-      return { id: row.id, username: row.username, full_name: row.full_name, created_at: row.created_at }
-    },
-
-    logout(): void {
-      sessionUserId = null
-      logger.info('administrator logged out')
-    },
-
-    getSession(): AdminUser | null {
-      if (sessionUserId == null) return null
-      const db = getDb()
-      const user = usersRepository(db).getById(sessionUserId)
+      const user = await repo.users.getById(match.id)
+      if (!user) throw new Error('Invalid username or password')
+      sessionUserId = user.id
+      sessionExpiresAt = Date.now() + SESSION_TTL_MS
+      logger.info('administrator logged in', { username: user.username })
       return user
     },
 
-    changePassword(currentPassword: string, newPassword: string): void {
-      const db = getDb()
+    async logout(): Promise<void> {
+      sessionUserId = null
+      sessionExpiresAt = 0
+      logger.info('administrator logged out')
+    },
+
+    async getSession(): Promise<AdminUser | null> {
+      if (sessionUserId == null || Date.now() >= sessionExpiresAt) return null
+      return repo.users.getById(sessionUserId)
+    },
+
+    async isAuthenticated(): Promise<boolean> {
+      return (await this.getSession()) !== null
+    },
+
+    async changePassword(currentPassword: string, newPassword: string): Promise<void> {
       if (sessionUserId == null) {
         throw new Error('Not authenticated')
       }
-      const row = db
-        .prepare('SELECT password_hash, username, full_name, created_at FROM admin_users WHERE id = ?')
-        .get(sessionUserId) as {
-        password_hash: string
-        username: string
-        full_name: string | null
-        created_at: string
-      }
-      if (!row || !bcrypt.compareSync(currentPassword, row.password_hash)) {
+      const storedHash = await repo.users.getPasswordHash(sessionUserId)
+      if (!storedHash || !bcrypt.compareSync(currentPassword, storedHash)) {
         throw new Error('Current password is incorrect')
       }
       if (!newPassword || newPassword.length < 8) {
         throw new Error('New password must be at least 8 characters')
       }
-      const hash = bcrypt.hashSync(newPassword, SALT_ROUNDS)
-      usersRepository(db).updatePassword(sessionUserId, hash)
+      const hash = await bcrypt.hash(newPassword, SALT_ROUNDS)
+      await repo.users.updatePassword(sessionUserId, hash)
       logger.info('administrator password changed')
     },
 

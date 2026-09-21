@@ -8,6 +8,7 @@ import {
   Tags,
   Building2,
   Repeat,
+  Network,
   Settings,
   LogOut,
   LibraryBig,
@@ -26,6 +27,7 @@ const NAV = [
   { to: '/admin/categories', label: 'Categories', icon: Tags, end: false },
   { to: '/admin/publishers', label: 'Publishers', icon: Building2, end: false },
   { to: '/admin/borrowings', label: 'Borrowings', icon: Repeat, end: false },
+  { to: '/admin/network', label: 'Network Server', icon: Network, end: false },
   { to: '/admin/settings', label: 'Settings', icon: Settings, end: false }
 ]
 
