@@ -1,6 +1,6 @@
 appId: com.opac.librarysystem
 productName: OPAC Library System
-copyright: Copyright © 2026 OPAC Library System
+copyright: Copyright © 2026 GilmierDev
 
 directories:
   output: release

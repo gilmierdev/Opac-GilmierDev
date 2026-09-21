@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Local OPAC Library Desktop Application - offline library catalog with admin management",
   "private": true,
-  "author": "OPAC Library System",
+  "author": "GilmierDev",
   "license": "MIT",
   "main": "out/main/main.js",
   "scripts": {

@@ -5,6 +5,24 @@ import { join, dirname } from 'node:path'
 import pg from 'pg'
 import type { SystemDirs } from '../../config/paths'
 import { logger } from '../../utils/logger'
+import { encryptSecret, decryptSecret, isEncrypted } from '../../utils/crypto'
+
+/** Port override for the embedded PostgreSQL server. Useful when the default
+ *  port is already taken (e.g. smoke tests that must not clash with a real
+ *  installation). Valid range: 1024-65535. */
+function managedPort(): number {
+  const raw = process.env.OPAC_PG_PORT
+  if (raw) {
+    const parsed = Number.parseInt(raw, 10)
+    if (Number.isInteger(parsed) && parsed >= 1024 && parsed <= 65535) {
+      return parsed
+    }
+    logger.warn('invalid OPAC_PG_PORT value, falling back to default', { value: raw })
+  }
+  return 54321
+}
+
+const MANAGED_PORT = managedPort()
 
 export interface PgClusterInfo extends CredentialsFile {
   binDir: string
@@ -24,7 +42,6 @@ export interface CredentialsFile {
 
 export type ClusterStatus = 'running' | 'stopped' | 'uninitialized'
 
-const MANAGED_PORT = 54321
 const SUPERUSER = 'postgres'
 const APP_USER = 'opac'
 const APP_DATABASE = 'opac'
@@ -79,6 +96,14 @@ export function readCredentials(dirs: SystemDirs): CredentialsFile | null {
     if (!existsSync(credentialsPath(dirs))) return null
     const raw = JSON.parse(readFileSync(credentialsPath(dirs), 'utf-8')) as CredentialsFile
     if (!raw.port || !raw.database || !raw.appUser || !raw.appUserPassword) return null
+    try {
+      raw.superuserPassword = decryptSecret(raw.superuserPassword)
+      raw.appUserPassword = decryptSecret(raw.appUserPassword)
+    } catch {
+      // Never let a decryption failure masquerade as "fresh install": surface it
+      // as null so ensure() fails loudly instead of rotating credentials.
+      return null
+    }
     return raw
   } catch {
     return null
@@ -87,7 +112,47 @@ export function readCredentials(dirs: SystemDirs): CredentialsFile | null {
 
 function writeCredentials(dirs: SystemDirs, creds: CredentialsFile): void {
   mkdirSync(dirs.databaseDir, { recursive: true })
-  writeFileSync(credentialsPath(dirs), JSON.stringify(creds, null, 2), { mode: 0o600 })
+  const encrypted: CredentialsFile = {
+    ...creds,
+    superuserPassword: encryptSecret(creds.superuserPassword),
+    appUserPassword: encryptSecret(creds.appUserPassword)
+  }
+  writeFileSync(credentialsPath(dirs), JSON.stringify(encrypted, null, 2), { mode: 0o600 })
+}
+
+/** Upgrades a legacy plaintext credentials file to encrypted storage, but only
+ *  after the database has been reached successfully (so we never rotate
+ *  credentials or lock the app out because of a transient encryption failure).
+ */
+function upgradeCredentialsOnDisk(dirs: SystemDirs, info: PgClusterInfo): void {
+  try {
+    if (!existsSync(credentialsPath(dirs))) return
+    const raw = JSON.parse(readFileSync(credentialsPath(dirs), 'utf-8')) as Partial<CredentialsFile>
+    if (
+      typeof raw.superuserPassword === 'string' &&
+      typeof raw.appUserPassword === 'string' &&
+      (isEncrypted(raw.superuserPassword) || isEncrypted(raw.appUserPassword))
+    ) {
+      return
+    }
+    saveCredentials(dirs, info)
+    logger.info('PostgreSQL credentials upgraded to encrypted storage')
+  } catch (err) {
+    logger.warn('could not upgrade PostgreSQL credentials to encrypted storage', err)
+  }
+}
+
+function saveCredentials(dirs: SystemDirs, info: PgClusterInfo): void {
+  writeCredentials(dirs, {
+    port: info.port,
+    database: info.database,
+    superuser: info.superuser,
+    superuserPassword: info.superuserPassword,
+    appUser: info.appUser,
+    appUserPassword: info.appUserPassword,
+    externalBinDir: info.externalBinDir,
+    initializedAt: info.initializedAt
+  })
 }
 
 function execAsync(cmd: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
@@ -106,7 +171,7 @@ function pgVersionExists(dataDir: string): boolean {
   return existsSync(join(dataDir, 'PG_VERSION'))
 }
 
-function ensureListenLocalOnly(dataDir: string, port: number): void {
+function ensureListenLocalOnly(dataDir: string, port: number): string {
   const confPath = join(dataDir, 'postgresql.conf')
   let conf = existsSync(confPath) ? readFileSync(confPath, 'utf-8') : ''
   const setLine = (name: string, value: string): void => {
@@ -123,22 +188,30 @@ function ensureListenLocalOnly(dataDir: string, port: number): void {
   setLine('password_encryption', "'scram-sha-256'")
   writeFileSync(confPath, conf)
 
-  // Loopback trust ONLY for the superuser maintenance database so that the
-  // library's own tooling (pg_ctl stop) can manage the cluster cleanly.
-  // All other loopback connections still require the opac password.
+  // Lock the cluster down to loopback-only and require a password for every
+  // connection: there is deliberately NO `trust` entry. The app manages the
+  // server itself (pg_ctl stop uses the server's own control channel, not the
+  // network authentication layer), so a trust rule would only let any local
+  // process connect to the superuser account without a password.
   const hbaPath = join(dataDir, 'pg_hba.conf')
-  if (existsSync(hbaPath)) {
-    const trustLine = `host ${APP_DATABASE} ${SUPERUSER} 127.0.0.1/32 trust`
-    const content = readFileSync(hbaPath, 'utf-8')
-    if (!content.includes(trustLine)) {
-      writeFileSync(hbaPath, content.trimEnd() + `\n${trustLine}\n`)
-    }
-  } else {
-    writeFileSync(
-      hbaPath,
-      `# PostgreSQL Client Authentication Configuration\nhost all all 127.0.0.1/32 scram-sha-256\nhost all all ::1/128 scram-sha-256\nhost ${APP_DATABASE} ${SUPERUSER} 127.0.0.1/32 trust\n`
-    )
+  const hbaRules = [
+    '# PostgreSQL Client Authentication Configuration',
+    'host all all 127.0.0.1/32 scram-sha-256',
+    'host all all ::1/128 scram-sha-256'
+  ].join('\n')
+  const existing = existsSync(hbaPath) ? readFileSync(hbaPath, 'utf8') : ''
+  let content = existing
+  // Strip any legacy loopback trust entries that older versions may have added.
+  content = content
+    .split('\n')
+    .filter((line) => !/^host\s+.+\s+.+\s+(127\.0\.0\.1\/32|::1\/128)\s+trust\s*$/i.test(line.trim()))
+    .join('\n')
+  if (!/host\s+all\s+all\s+127\.0\.0\.1\/32\s+scram-sha-256/i.test(content)) {
+    content = content.trimEnd() + '\n' + hbaRules + '\n'
   }
+  writeFileSync(hbaPath, content)
+
+  return hbaPath
 }
 
 export interface ProvisionHooks {
@@ -157,6 +230,11 @@ export class PostgresProvisioner {
 
   binDir(): string {
     return resolveBinDir()
+  }
+
+  /** Path to the managed cluster's pg_hba.conf (exposed for smoke tests). */
+  clientAuthConfigPath(): string {
+    return join(this.dirs.pgDataDir, 'pg_hba.conf')
   }
 
   getInfo(): PgClusterInfo | null {
@@ -229,6 +307,13 @@ export class PostgresProvisioner {
       }
       writeCredentials(this.dirs, creds)
       this.onLog('PostgreSQL data directory initialised')
+    } else if (!creds) {
+      // A data directory exists but the credentials file is missing or
+      // undecryptable (e.g. DPAPI key changed). Never re-provision: that would
+      // silently rotate the passwords and brick the existing cluster.
+      throw new Error(
+        'The PostgreSQL data directory already exists but its credentials could not be read or decrypted. Reinstall or run on the Windows account that set up the library.'
+      )
     }
 
     const info: CredentialsFile = this.getInfo() ?? (creds as CredentialsFile)
@@ -278,6 +363,10 @@ export class PostgresProvisioner {
     } finally {
       await admin.end().catch(() => undefined)
     }
+
+    // Rewrite a legacy plaintext credentials file as encrypted only after we
+    // have proven we can reach the cluster with the current secrets.
+    upgradeCredentialsOnDisk(this.dirs, this.getInfo() ?? this.getInfoAsCluster(info))
 
     return this.getInfoAsCluster(info)
   }

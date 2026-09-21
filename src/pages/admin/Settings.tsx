@@ -234,7 +234,7 @@ export default function SettingsPage() {
                 Remove logo
               </Button>
             )}
-            <p className="max-w-xs text-xs text-muted">Shown on the start screen and app headers. JPG/PNG/WEBP/GIF up to 12 MB.</p>
+            <p className="max-w-xs text-xs text-muted">Shown on the start screen and app headers. JPG, PNG or WEBP up to 12 MB.</p>
           </div>
         </div>
         <form onSubmit={saveLibraryInfo} className="space-y-4">

@@ -1,6 +1,0 @@
-FAILED 2026-09-21T05:12:02.091Z
-Error: ENOTEMPTY, Directory not empty: \\?\C:\Users\gilmi\OneDrive\Documents\Github\Opac-GilmierDev\.smoke-tmp '\\?\C:\Users\gilmi\OneDrive\Documents\Github\Opac-GilmierDev\.smoke-tmp'
-    at Object.rmSync (node:fs:1282:18)
-    at runSmoke (C:\Users\gilmi\OneDrive\Documents\Github\Opac-GilmierDev\out\main\chunks\smoke-BjvlTOe7.js:120:11)
-    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
-    at async C:\Users\gilmi\OneDrive\Documents\Github\Opac-GilmierDev\out\main\main.js:3555:7

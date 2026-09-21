@@ -1,4 +1,4 @@
-import { app, BrowserWindow, protocol, net, session } from 'electron'
+import { app, BrowserWindow, protocol, net, session, dialog } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { existsSync, writeFileSync } from 'node:fs'
@@ -9,6 +9,7 @@ import { initLogger, logger } from './utils/logger'
 import { provisioner } from './database/pg/provision'
 import type { Db } from './database/pg/client'
 import { registerAllIpc } from './ipc'
+import { setIpcSenderValidator } from './ipc/register'
 import type { Services } from './ipc/types'
 import { buildAdminServices } from './services/admin.services'
 import { buildUserServices } from './services/user.services'
@@ -34,6 +35,18 @@ let mainWindow: BrowserWindow | null = null
 let appServices: Services | null = null
 let adminDb: Db | null = null
 
+/** Restricts ipcMain.handle calls to the main frame of a real app window. */
+function enableIpcSenderValidation(): void {
+  setIpcSenderValidator((wc, event) => {
+    if (wc.isDestroyed()) return false
+    const frame = event.senderFrame
+    if (!frame) return false
+    const known = BrowserWindow.getAllWindows().some((win) => !win.isDestroyed() && win.webContents.id === wc.id)
+    if (!known) return false
+    return frame === wc.mainFrame
+  })
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1366,
@@ -58,10 +71,13 @@ function createWindow(): void {
     mainWindow?.show()
   })
 
+  const rendererUrl = process.env.ELECTRON_RENDERER_URL
+    ? process.env.ELECTRON_RENDERER_URL
+    : pathToFileURL(join(__dirname, '../renderer/index.html')).toString()
+
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    const allowed = process.env.ELECTRON_RENDERER_URL
-    if (allowed && url.startsWith(allowed)) return
-    if (!allowed && url.startsWith('file:')) return
+    if (process.env.ELECTRON_RENDERER_URL && url.startsWith(process.env.ELECTRON_RENDERER_URL)) return
+    if (!process.env.ELECTRON_RENDERER_URL && url === rendererUrl) return
     event.preventDefault()
   })
 
@@ -116,6 +132,7 @@ async function bootstrapAdmin(): Promise<void> {
   ensureDirs(dirs)
   ensureSystemDirs(systemDirs)
   initLogger({ logsDir: systemDirs.logsDir })
+  enableIpcSenderValidation()
   registerImageProtocol('admin')
 
   const makeProvisioner = provisioner(systemDirs, {
@@ -161,6 +178,7 @@ async function bootstrapUser(): Promise<void> {
   const dirs = getAppDirs()
   ensureDirs(dirs)
   initLogger({ logsDir: dirs.logsDir })
+  enableIpcSenderValidation()
   registerImageProtocol('user')
 
   const { services, getConnection } = buildUserServices(dirs)
@@ -230,10 +248,17 @@ app.whenReady().then(async () => {
 
   const mode = getAppMode()
   logger.info('boot mode', { mode })
-  if (mode === 'admin') {
-    await bootstrapAdmin()
-  } else {
-    await bootstrapUser()
+  try {
+    if (mode === 'admin') {
+      await bootstrapAdmin()
+    } else {
+      await bootstrapUser()
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    logger.error('failed to start application', { message })
+    dialog.showErrorBox('Unable to start', `${message}\n\nSee the log file for details.`)
+    app.exit(1)
   }
 })
 

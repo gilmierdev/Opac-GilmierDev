@@ -3,5 +3,6 @@ out/
 release/
 *.log
 .smoke-tmp/
+.smoke-failure.txt
 .DS_Store
 Thumbs.db

@@ -126,6 +126,11 @@ async function ensureMigrationTable(db: Db): Promise<void> {
       applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `)
+  await db.query(`
+    ALTER TABLE schema_migrations
+      ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '',
+      ADD COLUMN IF NOT EXISTS applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  `)
 }
 
 export async function getCurrentVersion(db: Db): Promise<number> {

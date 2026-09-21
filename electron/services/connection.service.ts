@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ConnectionConfig, ConnectionStatus } from '@shared/types'
 import { logger } from '../utils/logger'
+import { encryptSecret, decryptSecret } from '../utils/crypto'
 
 export function connectionFilePath(userDataDir: string): string {
   return join(userDataDir, 'connection.json')
@@ -37,7 +38,7 @@ export function connectionStore(userDataDir: string): ConnectionStore {
         ) {
           return null
         }
-        return { host: sanitizeHost(raw.host), port: raw.port, token: raw.token }
+        return { host: sanitizeHost(raw.host), port: raw.port, token: decryptSecret(raw.token) }
       } catch (err) {
         logger.error('failed to read connection configuration', err)
         return null
@@ -47,7 +48,7 @@ export function connectionStore(userDataDir: string): ConnectionStore {
       const clean: ConnectionConfig = {
         host: sanitizeHost(config.host),
         port: config.port,
-        token: config.token.trim()
+        token: encryptSecret(config.token.trim())
       }
       writeFileSync(connectionFilePath(userDataDir), JSON.stringify(clean, null, 2), 'utf8')
       logger.info('connection configuration saved')

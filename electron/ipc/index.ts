@@ -15,16 +15,16 @@ import type { Services } from './types'
 
 export function registerAllIpc(services: Services): void {
   registerAppIpc(services)
-  registerAuthIpc(services)
+  if (services.auth) registerAuthIpc(services)
   registerBooksIpc(services)
   registerAuthorsIpc(services)
   registerCategoriesIpc(services)
   registerPublishersIpc(services)
-  registerBorrowingsIpc(services)
-  registerBackupIpc(services)
-  registerImagesIpc(services)
+  if (services.borrowings) registerBorrowingsIpc(services)
+  if (services.backup) registerBackupIpc(services)
+  if (services.images) registerImagesIpc(services)
   registerSettingsIpc(services)
-  registerConnectionsIpc(services)
-  registerNetworkIpc(services)
+  if (services.connection) registerConnectionsIpc(services)
+  if (services.network) registerNetworkIpc(services)
   registerDatabaseIpc(services)
 }

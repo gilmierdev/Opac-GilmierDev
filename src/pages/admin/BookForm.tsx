@@ -218,7 +218,7 @@ export default function BookForm() {
                 Remove cover
               </Button>
             )}
-            <p className="max-w-xs text-xs text-muted">JPG, PNG, WEBP or GIF up to 12 MB.</p>
+            <p className="max-w-xs text-xs text-muted">JPG, PNG or WEBP up to 12 MB.</p>
           </div>
         </div>
 

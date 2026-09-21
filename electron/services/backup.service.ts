@@ -143,7 +143,10 @@ export function backupService(deps: BackupServiceDeps): BackupService {
     }
   }
 
-  function readBackup(folder: string): {
+  function readBackup(
+    folder: string,
+    currentSchemaVersion: number
+  ): {
     manifest: { format: string; formatVersion: number; schemaVersion: number }
     data: Record<string, unknown[]>
   } {
@@ -160,6 +163,11 @@ export function backupService(deps: BackupServiceDeps): BackupService {
     if (manifest.format !== FORMAT || manifest.formatVersion !== FORMAT_VERSION) {
       throw new Error('This backup was created by an incompatible version')
     }
+    if (typeof manifest.schemaVersion === 'number' && manifest.schemaVersion > currentSchemaVersion) {
+      throw new Error(
+        `This backup uses an unsupported schema version (${manifest.schemaVersion}) and cannot be restored safely`
+      )
+    }
     const data = JSON.parse(readFileSync(dataFile, 'utf8')) as Record<string, unknown[]>
     for (const table of BACKUP_TABLES) {
       if (!Array.isArray(data[table])) {
@@ -169,10 +177,51 @@ export function backupService(deps: BackupServiceDeps): BackupService {
     return { manifest, data }
   }
 
+  /** Column names a backup may legally reference for a given table, taken from
+   *  the live database schema. Anything else is rejected so a crafted backup
+   *  file can never inject SQL through the INSERT column list. */
+  async function allowedColumns(table: string): Promise<Set<string>> {
+    const rows = await deps.db.many<{ column_name: string }>(
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = $1`,
+      [table]
+    )
+    return new Set(rows.map((r) => r.column_name))
+  }
+
+  function validateRows(
+    table: string,
+    rows: Array<Record<string, unknown>>,
+    allowed: Set<string>
+  ): void {
+    for (const row of rows) {
+      for (const [column, value] of Object.entries(row)) {
+        if (!allowed.has(column)) {
+          throw new Error(`The backup contains an unknown column "${column}" in table "${table}"`)
+        }
+        if (value !== null && typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
+          throw new Error(`The backup contains an invalid value for "${table}.${column}"`)
+        }
+      }
+    }
+  }
+
   async function applyRestore(folder: string): Promise<void> {
-    const { data } = readBackup(folder)
+    const currentSchemaVersion = await deps.getSchemaVersion()
+    const { data } = readBackup(folder, currentSchemaVersion)
+
+    const schemaVectors = new Map<string, Set<string>>()
+    for (const table of BACKUP_TABLES) {
+      schemaVectors.set(table, await allowedColumns(table))
+    }
 
     await deps.db.tx(async (tx) => {
+      for (const table of BACKUP_TABLES) {
+        const rows = data[table]
+        if (!rows.length) continue
+        validateRows(table, rows as Array<Record<string, unknown>>, schemaVectors.get(table) as Set<string>)
+      }
+
       const tablesToClear = [...BACKUP_TABLES].sort(
         (a, b) => orderOf(b) - orderOf(a)
       )
@@ -278,7 +327,8 @@ export function backupService(deps: BackupServiceDeps): BackupService {
       }
       const picked = result.filePaths[0]
       try {
-        readBackup(picked)
+        const currentSchemaVersion = await deps.getSchemaVersion()
+        readBackup(picked, currentSchemaVersion)
       } catch (err) {
         return { restored: false, message: err instanceof Error ? err.message : 'Invalid backup' }
       }

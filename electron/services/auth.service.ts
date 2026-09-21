@@ -5,6 +5,9 @@ import { logger } from '../utils/logger'
 
 const SALT_ROUNDS = 12
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000
+const MAX_FAILED_ATTEMPTS = 5
+const LOCKOUT_MS = 60_000
+const FAILURE_WINDOW_MS = 5 * 60_000
 
 export interface AuthService {
   needsSetup(): Promise<boolean>
@@ -20,6 +23,53 @@ export interface AuthService {
 export function authService(repo: Repositories): AuthService {
   let sessionUserId: number | null = null
   let sessionExpiresAt = 0
+  const failedAttempts = new Map<string, number[]>()
+
+  function rejectShuffle(): Error {
+    return new Error('Invalid username or password')
+  }
+
+  function validatePasswordStrength(password: string): string | null {
+    if (!password || password.length < 8) {
+      return 'Password must be at least 8 characters'
+    }
+    if (!/[A-Za-z]/.test(password)) {
+      return 'Password must contain at least one letter'
+    }
+    if (!/\d/.test(password)) {
+      return 'Password must contain at least one number'
+    }
+    return null
+  }
+
+  function isLockedOut(username: string): Error | null {
+    const stamp = Date.now()
+    const attempts = (failedAttempts.get(username) ?? []).filter((t) => stamp - t < FAILURE_WINDOW_MS)
+    failedAttempts.set(username, attempts)
+    if (attempts.length >= MAX_FAILED_ATTEMPTS) {
+      const oldest = attempts[0] ?? stamp
+      const retryAt = oldest + LOCKOUT_MS
+      if (stamp < retryAt) {
+        return new Error(`Too many failed attempts. Try again in ${Math.ceil((retryAt - stamp) / 1000)} seconds.`)
+      }
+      failedAttempts.delete(username)
+    }
+    return null
+  }
+
+  function recordFailure(username: string): void {
+    const stamp = Date.now()
+    const attempts = (failedAttempts.get(username) ?? []).filter((t) => stamp - t < FAILURE_WINDOW_MS)
+    attempts.push(stamp)
+    if (attempts.length >= MAX_FAILED_ATTEMPTS) {
+      logger.warn('administrator login locked out', { username })
+    }
+    failedAttempts.set(username, attempts)
+  }
+
+  function recordSuccess(username: string): void {
+    failedAttempts.delete(username)
+  }
 
   return {
     async needsSetup(): Promise<boolean> {
@@ -34,8 +84,9 @@ export function authService(repo: Repositories): AuthService {
       if (!username || username.length < 3) {
         throw new Error('Username must be at least 3 characters')
       }
-      if (!input.password || input.password.length < 8) {
-        throw new Error('Password must be at least 8 characters')
+      const strengthError = validatePasswordStrength(input.password)
+      if (strengthError) {
+        throw new Error(strengthError)
       }
       const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS)
       const user = await repo.users.createFirstAdmin({
@@ -50,17 +101,22 @@ export function authService(repo: Repositories): AuthService {
     },
 
     async login(username: string, password: string): Promise<AdminUser> {
-      const trimmed = username.trim()
+      const trimmed = username.trim().toLowerCase()
+      const locked = isLockedOut(trimmed)
+      if (locked) throw locked
       const match = await repo.users.findByUsername(trimmed)
       if (!match) {
-        throw new Error('Invalid username or password')
+        recordFailure(trimmed)
+        throw rejectShuffle()
       }
       const storedHash = await repo.users.getPasswordHash(match.id)
       if (!storedHash || !bcrypt.compareSync(password, storedHash)) {
-        throw new Error('Invalid username or password')
+        recordFailure(trimmed)
+        throw rejectShuffle()
       }
+      recordSuccess(trimmed)
       const user = await repo.users.getById(match.id)
-      if (!user) throw new Error('Invalid username or password')
+      if (!user) throw rejectShuffle()
       sessionUserId = user.id
       sessionExpiresAt = Date.now() + SESSION_TTL_MS
       logger.info('administrator logged in', { username: user.username })
@@ -79,7 +135,8 @@ export function authService(repo: Repositories): AuthService {
     },
 
     async isAuthenticated(): Promise<boolean> {
-      return (await this.getSession()) !== null
+      if (sessionUserId == null || Date.now() >= sessionExpiresAt) return false
+      return (await repo.users.getById(sessionUserId)) !== null
     },
 
     async changePassword(currentPassword: string, newPassword: string): Promise<void> {
@@ -90,25 +147,18 @@ export function authService(repo: Repositories): AuthService {
       if (!storedHash || !bcrypt.compareSync(currentPassword, storedHash)) {
         throw new Error('Current password is incorrect')
       }
-      if (!newPassword || newPassword.length < 8) {
-        throw new Error('New password must be at least 8 characters')
+      const strengthError = validatePasswordStrength(newPassword)
+      if (strengthError) {
+        throw new Error(strengthError)
       }
       const hash = await bcrypt.hash(newPassword, SALT_ROUNDS)
       await repo.users.updatePassword(sessionUserId, hash)
+      // Invalidate the current session so a password change forces a fresh sign-in.
+      sessionUserId = null
+      sessionExpiresAt = 0
       logger.info('administrator password changed')
     },
 
-    validatePasswordStrength(password: string): string | null {
-      if (!password || password.length < 8) {
-        return 'Password must be at least 8 characters'
-      }
-      if (!/[A-Za-z]/.test(password)) {
-        return 'Password must contain at least one letter'
-      }
-      if (!/\d/.test(password)) {
-        return 'Password must contain at least one number'
-      }
-      return null
-    }
+    validatePasswordStrength
   }
 }

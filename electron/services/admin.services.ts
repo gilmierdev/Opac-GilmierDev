@@ -1,5 +1,6 @@
 import { app, shell } from 'electron'
 import type { AppDirs, SystemDirs } from '../config/paths'
+import { isPathWithin } from '../config/paths'
 import type { Db } from '../database/pg/client'
 import { pgDb } from '../database/pg/client'
 import type { PostgresProvisioner } from '../database/pg/provision'
@@ -90,7 +91,13 @@ export function buildAdminServices(
     }
 
     const services: Services = {
-      dirs: appDirs,
+      dirs: {
+        ...appDirs,
+        imagesDir: systemDirs.imagesDir,
+        backupsDir: systemDirs.backupsDir,
+        logsDir: systemDirs.logsDir,
+        dbPath: systemDirs.databaseDir
+      },
       installInfo: async () => ({
         mode: 'admin',
         dataDir: systemDirs.root,
@@ -129,6 +136,12 @@ export function buildAdminServices(
       connection: null,
       isAuthenticated: () => auth.isAuthenticated(),
       openPath: async (path) => {
+        if (typeof path !== 'string' || !path) throw new Error('Invalid path')
+        const withinUserData = isPathWithin(appDirs.userData, path)
+        const withinSystem = isPathWithin(systemDirs.root, path)
+        if (!withinUserData && !withinSystem) {
+          throw new Error('Refusing to open a path outside the application data directories')
+        }
         const result = await shell.openPath(path)
         if (result) throw new Error(`Unable to open path: ${result}`)
       },

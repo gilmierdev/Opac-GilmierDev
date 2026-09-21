@@ -1,11 +1,12 @@
 import { join } from 'node:path'
-import { rmSync, mkdirSync } from 'node:fs'
+import { rmSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import type { SystemDirs } from './config/paths'
 import { pgDb } from './database/pg/client'
-import { provisioner } from './database/pg/provision'
+import { provisioner, readCredentials } from './database/pg/provision'
 import { runMigrations, currentSchemaVersion } from './database/pg/migrations'
 import { repositories, type Repositories } from './database/pg/repositories'
 import { authService, type AuthService } from './services/auth.service'
+import { backupService } from './services/backup.service'
 import type { Db } from './database/pg/client'
 
 interface SmokeOptions {
@@ -36,7 +37,7 @@ async function removeDirSafe(path: string): Promise<void> {
 
 async function withPostgres<T>(
   dirs: SystemDirs,
-  fn: (db: Db, repo: Repositories) => Promise<T>
+  fn: (db: Db, repo: Repositories, prov: ReturnType<typeof provisioner>) => Promise<T>
 ): Promise<T> {
   const prov = provisioner(dirs)
   const info = await prov.ensure()
@@ -48,11 +49,90 @@ async function withPostgres<T>(
     database: info.database
   })
   try {
-    return await fn(db, repositories(db))
+    return await fn(db, repositories(db), prov)
   } finally {
     await db.end()
     await prov.stop()
   }
+}
+
+function assertHbaNoTrust(hbaPath: string): void {
+  const content = readFileSync(hbaPath, 'utf8')
+  assert(!/trust\s*$/im.test(content.trim()), 'pg_hba.conf must not grant trust auth')
+  assert(/host\s+all\s+all\s+127\.0\.0\.1\/32\s+scram-sha-256/i.test(content), 'loopback requires scram-sha-256')
+  assert(/host\s+all\s+all\s+::1\/128\s+scram-sha-256/i.test(content), 'ipv6 loopback requires scram-sha-256')
+}
+
+async function withBackup(
+  dirs: SystemDirs,
+  db: Db,
+  repo: Repositories
+): Promise<void> {
+  const backup = backupService({
+    db,
+    imagesDir: dirs.imagesDir,
+    backupsDir: dirs.backupsDir,
+    getSchemaVersion: () => currentSchemaVersion(db),
+    getLibraryName: () => Promise.resolve('Smoke Library')
+  })
+
+  const currentCount = (await repo.books.list({ page: 1, pageSize: 1000 })).total
+
+  const created = await backup.create()
+  assert((await backup.list()).some((b) => b.filename === created.filename), 'created backup should be listed')
+
+  // Tamper with a column name to inject SQL; restore must reject and not change data.
+  const dataPath = join(created.path, 'data.json')
+  const backupData = JSON.parse(readFileSync(dataPath, 'utf8')) as { books: Array<Record<string, unknown>> }
+  const bookColumns = Object.keys(backupData.books[0] ?? {})
+  const firstColumn = bookColumns[0] ?? 'id'
+  const tampered = {
+    ...backupData,
+    books: backupData.books.map((row) => {
+      const copy = { ...row }
+      delete copy[firstColumn]
+      copy[`${firstColumn}"); DROP TABLE books;--`] = row[firstColumn]
+      return copy
+    })
+  }
+  writeFileSync(dataPath, JSON.stringify(tampered), 'utf8')
+
+  let tamperedThrew = false
+  try {
+    await backup.restore(created.filename)
+  } catch {
+    tamperedThrew = true
+  }
+  assert(tamperedThrew, 'restore of a tampered backup must be rejected')
+  assert((await repo.books.list({ page: 1, pageSize: 1000 })).total === currentCount, 'tampered restore must not change data')
+
+  // A clean backup round-trips and preserves books.
+  const good = await backup.create()
+  await repo.books.create({ title: 'Temporary Book', isbn: '9780000000027', total_copies: 1, available_copies: 1 })
+  await backup.restore(good.filename)
+  const goodData = JSON.parse(readFileSync(join(good.path, 'data.json'), 'utf8')) as { books: unknown[] }
+  assert(
+    (await repo.books.list({ page: 1, pageSize: 1000 })).total === goodData.books.length,
+    'clean restore should preserve the backed-up book count'
+  )
+}
+
+function assertCredentialsDoNotReProvision(dirs: SystemDirs): void {
+  const poisoned: Record<string, unknown> = {
+    port: 54321,
+    database: 'opac',
+    superuser: 'postgres',
+    superuserPassword: 'enc:!!!not-base64!!!',
+    appUser: 'opac',
+    appUserPassword: 'enc:!!!not-base64!!!',
+    externalBinDir: null,
+    initializedAt: '2026-01-01T00:00:00.000Z'
+  }
+  writeFileSync(join(dirs.databaseDir, 'credentials.json'), JSON.stringify(poisoned, null, 2))
+  assert(
+    readCredentials(dirs) === null,
+    'credentials with an undecryptable secret must not be treated as a fresh install'
+  )
 }
 
 export async function runSmoke(options: SmokeOptions): Promise<void> {
@@ -75,7 +155,8 @@ export async function runSmoke(options: SmokeOptions): Promise<void> {
     configFile: join(root, 'config.json')
   }
 
-  await withPostgres(dirs, async (db, repo) => {
+  await withPostgres(dirs, async (db, repo, prov) => {
+    console.log('[smoke] managed cluster ready')
     const applied = await runMigrations(db)
     assert(applied >= 1, `migrations should run, applied=${applied}`)
     const schemaVersion = await currentSchemaVersion(db)
@@ -164,9 +245,17 @@ export async function runSmoke(options: SmokeOptions): Promise<void> {
     await repo.books.restore(book.id)
     assert((await repo.books.getById(book.id))?.is_archived === false, 'book restored')
 
+    // ---- Security hardening: no trust auth in pg_hba.conf ----
+    assertHbaNoTrust(prov.clientAuthConfigPath())
+
+    // ---- Backup hardening: SQL injection via crafted backup is rejected ----
+    await withBackup(dirs, db, repo)
+
     // ---- Auth ----
     await testAuth(repo)
   })
+
+  assertCredentialsDoNotReProvision(dirs)
 
   await removeDirSafe(root)
   console.log('[smoke] all PostgreSQL smoke tests passed')
@@ -180,6 +269,12 @@ async function testAuth(repo: Repositories): Promise<void> {
   assert(createdAdmin.id > 0, 'first admin created')
   assert((await auth.needsSetup()) === false, 'after setup, no longer needs setup')
 
+  const weakRejected = await auth
+    .setup({ username: 'other', password: 'password' })
+    .then(() => false)
+    .catch(() => true)
+  assert(weakRejected, 'weak setup password must be rejected')
+
   const logged = await auth.login('admin', 'StrongPass1')
   assert(logged.username === 'admin', 'login succeeds with correct password')
   let loginThrew = false
@@ -191,6 +286,7 @@ async function testAuth(repo: Repositories): Promise<void> {
   assert(loginThrew, 'login with wrong password rejects')
   assert((await auth.getSession())?.username === 'admin', 'session is active after login')
   await auth.changePassword('StrongPass1', 'NewStrongPass1')
+  assert((await auth.getSession()) === null, 'session invalidated after password change')
   assert((await auth.login('admin', 'NewStrongPass1')).username === 'admin', 'login succeeds with new password')
   await auth.logout()
   assert((await auth.getSession()) === null, 'session cleared after logout')

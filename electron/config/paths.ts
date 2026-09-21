@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { mkdirSync } from 'node:fs'
 import { homedir, platform } from 'node:os'
 
@@ -85,6 +85,18 @@ export function ensureSystemDirs(dirs: SystemDirs): void {
 
 export function backslashToWindows(p: string): string {
   return p.replaceAll('/', '\\')
+}
+
+/** True when `candidate` is `parent` itself or lives inside `parent`. */
+export function isPathWithin(parent: string, candidate: string): boolean {
+  const resolvedParent = join(parent)
+  const resolvedCandidate = join(candidate)
+  if (resolvedCandidate === resolvedParent) return true
+  const prefix = resolvedParent.endsWith(sep) ? resolvedParent : resolvedParent + sep
+  if (platform() === 'win32') {
+    return resolvedCandidate.toLowerCase().startsWith(prefix.toLowerCase())
+  }
+  return resolvedCandidate.startsWith(prefix)
 }
 
 /** Resolves a stored cover filename safely inside the given images directory. */

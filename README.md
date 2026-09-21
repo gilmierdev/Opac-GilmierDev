@@ -26,9 +26,14 @@ The installer offers two install locations/editions:
 
 **Data & security**
 - Managed embedded PostgreSQL (`@embedded-postgres`), loopback-only on the Admin machine
+- Secrets at rest (DB passwords, connection token) are encrypted with OS DPAPI via Electron `safeStorage`
+- Login throttle, enforced password strength, and session invalidation on password change
+- Backup restore validates columns against the live schema (blocks SQL injection via crafted backups)
 - Legacy SQLite databases from previous installs are migrated automatically on first Admin run
 - User machines store only their connection settings — no library data
 - Hardened Electron profile: context isolation, sandbox, no node integration, strict CSP; covers served via a private `opac-img://` scheme
+
+See [SECURITY.md](./SECURITY.md) and [THREAT_MODEL.md](./THREAT_MODEL.md) for the full security documentation and threat analysis.
 
 ## Tech stack
 
@@ -73,7 +78,7 @@ A User install reads its cached connection on startup and falls back to the conn
 |---|---|
 | Admin data root | `%PROGRAMDATA%\OpacLibrarySystem` |
 | Legacy per-user data | `%APPDATA%\opac-library-system\data` (migrated on first Admin run) |
-| Managed PostgreSQL | loopback only, port `54321`, app role `opac` / db `opac` |
+| Managed PostgreSQL | loopback only, port `54321` (override: `OPAC_PG_PORT`), app role `opac` / db `opac` |
 | HTTP API port | `47821` (changeable in Network page) |
 | Auth | Admin: password login. User client / browser: bearer token (`Authorization: Bearer <token>`) |
 
