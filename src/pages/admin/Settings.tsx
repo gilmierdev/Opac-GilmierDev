@@ -11,7 +11,6 @@ import {
   KeyRound,
   Moon,
   Sun,
-  Info,
   ImageIcon
 } from 'lucide-react'
 import { useAppStore, applyTheme } from '../../stores/app'
@@ -367,21 +366,11 @@ export default function SettingsPage() {
         </section>
       )}
 
-      {/* About */}
       <section className="rounded-xl border border-slate-200 bg-surface p-6 shadow-card dark:border-slate-700">
         <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-foreground">
-          <Info className="h-4 w-4 text-primary-500" /> About
+          <SettingsIcon className="h-4 w-4 text-primary-500" /> Publisher
         </h2>
-        {paths ? (
-          <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-            <div className="text-muted">Application <dd className="font-medium text-foreground">{paths.versions.app}</dd></div>
-            <div className="text-muted">Electron <dd className="font-medium text-foreground">{paths.versions.electron}</dd></div>
-            <div className="text-muted">Chromium <dd className="font-medium text-foreground">{paths.versions.chrome}</dd></div>
-            <div className="text-muted">Node.js <dd className="font-medium text-foreground">{paths.versions.node}</dd></div>
-          </dl>
-        ) : (
-          <p className="text-sm text-muted">Loading version info…</p>
-        )}
+        <p className="text-sm font-medium text-foreground">gilmierDev software & ai Developer</p>
       </section>
 
       <ConfirmDialog
