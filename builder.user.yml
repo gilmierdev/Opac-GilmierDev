@@ -1,0 +1,5 @@
+extends: electron-builder.base.yml
+
+nsis:
+  artifactName: OPAC-Library-System-User-Setup-${version}.${ext}
+  include: build/installer-user.nsh

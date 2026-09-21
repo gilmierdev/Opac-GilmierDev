@@ -16,7 +16,10 @@
     "start": "electron .",
     "smoke": "electron . --smoke-test --smoke-dir=.smoke-tmp",
     "build": "npm run typecheck && electron-vite build",
-    "build:win": "npm run build && electron-builder --win",
+    "build:win": "npm run build && npm run dist:all",
+    "dist:admin": "electron-builder --win -c builder.admin.yml",
+    "dist:user": "electron-builder --win -c builder.user.yml",
+    "dist:all": "npm run dist:admin && npm run dist:user",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {

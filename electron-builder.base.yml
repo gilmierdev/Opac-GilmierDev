@@ -29,11 +29,9 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: OPAC Library System
-  artifactName: OPAC-Library-System-Setup-${version}.${ext}
   uninstallDisplayName: OPAC Library System
   installerIcon: build/icon.ico
   uninstallerIcon: build/icon.ico
-  include: build/installer.nsh
   deleteAppDataOnUninstall: false
 
 npmRebuild: false

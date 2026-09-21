@@ -54,16 +54,21 @@ npm run build        # typecheck + production build into out/
 npm run start        # run the production build locally (build first)
 npm run preview      # run the production build locally
 npm run icon         # regenerate build/icon.png + build/icon.ico
-npm run build:win    # build + package Windows NSIS installer into release/
+npm run build:win    # build + package both Windows NSIS installers into release/
+npm run dist:admin   # package the Admin (library server) installer only
+npm run dist:user    # package the User (catalog client) installer only
 ```
 
-The Windows installer is written to `release/OPAC-Library-System-Setup-<version>.exe`.
+Installers are written to `release/OPAC-Library-System-Admin-Setup-<version>.exe` and `release/OPAC-Library-System-User-Setup-<version>.exe`.
 
 > Note: on Windows, the Electron child processes don't attach their console output to the parent terminal. `npm run smoke` reports success/failure via its exit code; run `npm run build` first so `out/` is up to date.
 
 ## Install modes
 
-The installer asks whether to install as **Admin** or **User** and writes the choice to `%PROGRAMDATA%\OpacLibrarySystem\install.json` (the uninstaller removes it). Admin mode additionally writes a per-user copy under `%APPDATA%\opac-library-system\`.
+There are two dedicated Windows installers; each writes a fixed mode to `%PROGRAMDATA%\OpacLibrarySystem\install.json` (the uninstaller removes it). Admin mode additionally writes a per-user copy under `%APPDATA%\opac-library-system\`.
+
+- **Admin installer** (`...-Admin-Setup-<version>.exe`): hosts the library database and catalog server; `install.json` gets `"mode":"admin"`.
+- **User installer** (`...-User-Setup-<version>.exe`): catalog client for other computers; `install.json` gets `"mode":"user"`.
 
 The mode can be overridden at launch:
 
@@ -103,9 +108,13 @@ shared/
   api.ts                      # shared IPC contract types
 scripts/
   generate-icon.mjs           # zero-dependency app icon generator
-electron-builder.yml          # NSIS packaging config
+electron-builder.base.yml   # shared NSIS/packaging config
+builder.admin.yml           # Admin installer overrides (artifact name + NSIS hooks)
+builder.user.yml            # User installer overrides (artifact name + NSIS hooks)
 build/
-  installer.nsh               # NSIS edition-choice page + install.json hooks
+  installer-admin.nsh       # NSIS hooks writing "admin" mode to install.json
+  installer-user.nsh        # NSIS hooks writing "user" mode to install.json
+  installer-mode.nsh        # shared NSIS customInstall/customUnInstall macros
 ```
 
 ## Architecture notes

@@ -29,7 +29,7 @@ Run through this checklist before each release. Items are ordered into
 
 - [ ] Installer artifact builds cleanly (`npm run build:win`) and is signed
       OR the unsigned/SmartScreen limitation is acknowledged.
-- [ ] `electron-builder.yml` `appId`, product name, and NSIS per-machine target
+- [ ] `electron-builder.base.yml` `appId`, product name, and NSIS per-machine target
       are intentional (per-machine install means data in
       `%PROGRAMDATA%\OpacLibrarySystem`).
 - [ ] Version bumped; `README` release notes updated (breaking backup/manifest

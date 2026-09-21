@@ -1,0 +1,5 @@
+extends: electron-builder.base.yml
+
+nsis:
+  artifactName: OPAC-Library-System-Admin-Setup-${version}.${ext}
+  include: build/installer-admin.nsh

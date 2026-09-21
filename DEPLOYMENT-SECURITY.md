@@ -4,7 +4,8 @@ Operational guidance for deploying the OPAC Library System on Windows.
 
 ## Installer behavior
 
-- NSIS per-machine installation (`electron-builder.yml`). Data lives in
+- NSIS per-machine installation (`electron-builder.base.yml` + per-mode
+  `builder.admin.yml` / `builder.user.yml`). Data lives in
   `%PROGRAMDATA%\OpacLibrarySystem` (PostgreSQL data dir, creds, backups,
   covers, logs) and survives reinstall/upgrade.
 - The installer is **unsigned** out of the box: Windows SmartScreen will warn.

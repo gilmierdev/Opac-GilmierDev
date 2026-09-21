@@ -218,4 +218,4 @@ writeFileSync(join(OUT_DIR, 'icon.ico'), encodeIco(png256))
 
 console.log(`Generated build/icon.png (512x512, ${png512.length} bytes)`)
 console.log(`Generated build/icon.ico (256x256 entry, ${png256.length} bytes)`)
-console.log('Reference in electron-builder.yml via "directories.buildIcon" or build/icon.ico/icon.png')
+console.log('Reference in electron-builder.base.yml via "directories.buildIcon" or build/icon.ico/icon.png')
