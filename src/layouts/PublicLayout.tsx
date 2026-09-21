@@ -71,6 +71,11 @@ export default function PublicLayout({ children, showBack = false }: PublicLayou
         </div>
       </header>
       <main className="flex-1">{children}</main>
+      <footer className="border-t border-slate-200 dark:border-slate-700">
+        <p className="mx-auto max-w-7xl px-4 py-3 text-center text-xs text-muted sm:px-6">
+          © 2026 GilmierDev
+        </p>
+      </footer>
     </div>
   )
 }

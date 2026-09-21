@@ -142,6 +142,9 @@ export default function AdminLayout() {
         <main className="mx-auto max-w-6xl px-6 py-8">
           <Outlet />
         </main>
+        <footer className="border-t border-slate-200 py-3 text-center text-xs text-muted dark:border-slate-700">
+          © 2026 GilmierDev
+        </footer>
       </div>
     </div>
   )
