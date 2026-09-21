@@ -11,17 +11,18 @@ export default function StartScreen() {
   const isUser = mode === 'user'
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-app px-6">
-      <div className="animate-fade-in w-full max-w-md text-center">
+    <div className="flex min-h-screen flex-col bg-app px-6">
+      <div className="flex flex-1 flex-col items-center justify-center">
+        <div className="animate-rise-in w-full max-w-md text-center">
         <div className="mb-6 flex justify-center">
           {logo ? (
             <img
               src={logo}
               alt={`${settings.library_name} logo`}
-              className="h-28 w-28 rounded-2xl object-cover shadow-lifted"
+              className="h-28 w-28 rounded-3xl object-cover shadow-lifted ring-1 ring-slate-200 dark:ring-slate-700"
             />
           ) : (
-            <div className="flex h-28 w-28 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-600 to-primary-800 shadow-lifted">
+            <div className="flex h-28 w-28 items-center justify-center rounded-3xl bg-gradient-to-br from-primary-500 to-primary-800 shadow-glow">
               <LibraryBig className="h-14 w-14 text-white" />
             </div>
           )}
@@ -40,7 +41,7 @@ export default function StartScreen() {
         <div className="mt-10 flex flex-col gap-3">
           <Link
             to="/catalog"
-            className="ring-focus group inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-6 py-3.5 text-sm font-semibold text-white shadow-card transition-colors hover:bg-primary-700"
+            className="ring-focus group inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 px-6 py-3.5 text-sm font-semibold text-white shadow-lifted transition-all hover:shadow-glow hover:brightness-105"
           >
             <BookOpenText className="h-5 w-5" />
             Browse the Catalog
@@ -72,7 +73,11 @@ export default function StartScreen() {
           <span className="text-slate-300 dark:text-slate-600">•</span>
           <span>{isUser ? (connection ? `Server ${serverLabel(connection.host, connection.port)}` : 'Not connected') : 'Works offline'}</span>
         </div>
+        </div>
       </div>
+      {isUser && (
+        <footer className="py-3 text-center text-xs text-muted">© 2026 GilmierDev</footer>
+      )}
     </div>
   )
 }

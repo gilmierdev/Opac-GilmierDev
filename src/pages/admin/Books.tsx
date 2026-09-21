@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Plus, Pencil, ArchiveRestore, BookOpen, X, ArrowUpDown } from 'lucide-react'
+import { Search, Plus, Pencil, ArchiveRestore, BookOpen, X, ArrowUpDown, FileSpreadsheet } from 'lucide-react'
 import Spinner from '../../components/ui/Spinner'
 import EmptyState from '../../components/ui/EmptyState'
 import Pagination from '../../components/ui/Pagination'
 import Badge from '../../components/ui/Badge'
 import Select from '../../components/ui/Select'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
+import ImportBooksModal from '../../components/ImportBooksModal'
 import BookCover from '../../components/BookCover'
 import type { AuthorListItem, Book, BookFilters, CategoryListItem } from '@shared/types'
 import { errorMessage } from '../../lib/utils'
@@ -32,6 +33,7 @@ export default function Books() {
   const [authors, setAuthors] = useState<AuthorListItem[]>([])
 
   const [target, setTarget] = useState<Book | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
 
   useEffect(() => {
     void window.api.categories.list().then(setCategories).catch(() => undefined)
@@ -93,12 +95,20 @@ export default function Books() {
             {includeArchived ? ' (incl. archived)' : ''}
           </p>
         </div>
-        <button
-          onClick={() => navigate('/admin/books/new')}
-          className="ring-focus inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700"
-        >
-          <Plus className="h-4 w-4" /> Add Book
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setImportOpen(true)}
+            className="ring-focus inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-surface px-4 py-2 text-sm font-semibold text-foreground shadow-card transition-colors hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
+          >
+            <FileSpreadsheet className="h-4 w-4 text-primary-600 dark:text-primary-400" /> Import
+          </button>
+          <button
+            onClick={() => navigate('/admin/books/new')}
+            className="ring-focus inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700"
+          >
+            <Plus className="h-4 w-4" /> Add Book
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-surface p-3 shadow-card dark:border-slate-700">
@@ -258,6 +268,12 @@ export default function Books() {
         danger={!target?.is_archived}
         onConfirm={handleArchive}
         onCancel={() => setTarget(null)}
+      />
+
+      <ImportBooksModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={() => void load()}
       />
     </div>
   )

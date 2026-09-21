@@ -91,11 +91,12 @@ export default function Connect() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-app px-6">
-      <div className="animate-fade-in w-full max-w-md">
+    <div className="flex min-h-screen flex-col bg-app px-6">
+      <div className="flex flex-1 flex-col items-center justify-center">
+        <div className="animate-rise-in w-full max-w-md">
         <div className="mb-6 flex justify-center">
-          <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-600 to-primary-800 shadow-lifted">
-            <LibraryBig className="h-8 w-8 text-white" />
+          <span className="flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-primary-500 to-primary-800 shadow-glow">
+            <LibraryBig className="h-10 w-10 text-white" />
           </span>
         </div>
 
@@ -196,7 +197,9 @@ export default function Connect() {
             </p>
           )}
         </div>
+        </div>
       </div>
+      <footer className="py-3 text-center text-xs text-muted">© 2026 GilmierDev</footer>
     </div>
   )
 }

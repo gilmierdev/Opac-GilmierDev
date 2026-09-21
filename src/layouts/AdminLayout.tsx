@@ -19,16 +19,32 @@ import {
 import { useAppStore, applyTheme } from '../stores/app'
 import { classNames, imageUrl, errorMessage } from '../lib/utils'
 
-const NAV = [
-  { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/admin/books', label: 'All Books', icon: BookOpen, end: false },
-  { to: '/admin/books/new', label: 'Add Book', icon: PlusCircle, end: false },
-  { to: '/admin/authors', label: 'Authors', icon: Users, end: false },
-  { to: '/admin/categories', label: 'Categories', icon: Tags, end: false },
-  { to: '/admin/publishers', label: 'Publishers', icon: Building2, end: false },
-  { to: '/admin/borrowings', label: 'Borrowings', icon: Repeat, end: false },
-  { to: '/admin/network', label: 'Network Server', icon: Network, end: false },
-  { to: '/admin/settings', label: 'Settings', icon: Settings, end: false }
+const NAV: { label: string; items: { to: string; label: string; icon: React.ElementType; end: boolean }[] }[] = [
+  {
+    label: 'Overview',
+    items: [{ to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true }]
+  },
+  {
+    label: 'Collection',
+    items: [
+      { to: '/admin/books', label: 'All Books', icon: BookOpen, end: false },
+      { to: '/admin/books/new', label: 'Add Book', icon: PlusCircle, end: false },
+      { to: '/admin/authors', label: 'Authors', icon: Users, end: false },
+      { to: '/admin/categories', label: 'Categories', icon: Tags, end: false },
+      { to: '/admin/publishers', label: 'Publishers', icon: Building2, end: false }
+    ]
+  },
+  {
+    label: 'Circulation',
+    items: [{ to: '/admin/borrowings', label: 'Borrowings', icon: Repeat, end: false }]
+  },
+  {
+    label: 'System',
+    items: [
+      { to: '/admin/network', label: 'Network Server', icon: Network, end: false },
+      { to: '/admin/settings', label: 'Settings', icon: Settings, end: false }
+    ]
+  }
 ]
 
 export default function AdminLayout() {
@@ -66,42 +82,66 @@ export default function AdminLayout() {
   return (
     <div className="flex min-h-screen bg-app">
       {/* Sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-slate-200 bg-surface dark:border-slate-700">
-        <Link to="/" className="ring-focus flex items-center gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+      <aside className="fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-slate-200 bg-surface dark:border-slate-700/70">
+        <Link
+          to="/"
+          className="ring-focus flex items-center gap-3 border-b border-slate-100 bg-gradient-to-br from-primary-50/70 to-transparent px-5 py-4 dark:border-slate-800 dark:from-primary-900/20"
+        >
           {logo ? (
-            <img src={logo} alt="Library logo" className="h-9 w-9 rounded-lg object-cover" />
+            <img
+              src={logo}
+              alt="Library logo"
+              className="h-10 w-10 rounded-xl object-cover shadow-card ring-1 ring-slate-200 dark:ring-slate-700"
+            />
           ) : (
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary-600 to-primary-800">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-800 shadow-glow">
               <LibraryBig className="h-5 w-5 text-white" />
             </span>
           )}
-          <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-semibold text-foreground">
-            {settings.library_name}
+          <span className="flex min-w-0 flex-col leading-tight">
+            <span className="truncate text-sm font-bold text-foreground">{settings.library_name}</span>
+            <span className="text-[11px] font-medium text-primary-600 dark:text-primary-400">Admin Console</span>
           </span>
         </Link>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-          {NAV.map(({ to, label, icon: Icon, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              className={({ isActive }) =>
-                classNames(
-                  'ring-focus flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300'
-                    : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
-                )
-              }
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              {label}
-            </NavLink>
+        <nav className="flex-1 space-y-5 overflow-y-auto p-3 scrollbar-thin">
+          {NAV.map((group) => (
+            <div key={group.label}>
+              <p className="mb-1 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-muted/70">
+                {group.label}
+              </p>
+              <div className="space-y-0.5">
+                {group.items.map(({ to, label, icon: Icon, end }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    end={end}
+                    className={({ isActive }) =>
+                      classNames(
+                        'ring-focus relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all',
+                        isActive
+                          ? 'bg-primary-50 font-semibold text-primary-700 dark:bg-primary-900/40 dark:text-primary-300'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-foreground dark:text-slate-300 dark:hover:bg-slate-800'
+                      )
+                    }
+                  >
+                    {({ isActive }) => (
+                      <>
+                        {isActive && (
+                          <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-primary-600" />
+                        )}
+                        <Icon className={classNames('h-4 w-4 shrink-0', isActive ? 'text-primary-600 dark:text-primary-400' : 'opacity-80')} />
+                        {label}
+                      </>
+                    )}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
 
-        <div className="border-t border-slate-100 p-3 dark:border-slate-800">
+        <div className="space-y-1 border-t border-slate-100 p-3 dark:border-slate-800">
           <button
             onClick={() => toggleTheme(theme === 'dark' ? 'light' : 'dark')}
             className="ring-focus flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
@@ -117,7 +157,7 @@ export default function AdminLayout() {
             Public catalog
           </Link>
           {user && (
-            <div className="mt-1 flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/60">
+            <div className="mt-1 flex items-center justify-between gap-2 rounded-xl bg-slate-100/80 px-3 py-2 ring-1 ring-slate-200 dark:bg-slate-800/80 dark:ring-slate-700">
               <div className="min-w-0">
                 <p className="truncate text-xs font-semibold text-foreground">
                   {user.full_name ?? user.username}
@@ -142,9 +182,6 @@ export default function AdminLayout() {
         <main className="mx-auto max-w-6xl px-6 py-8">
           <Outlet />
         </main>
-        <footer className="border-t border-slate-200 py-3 text-center text-xs text-muted dark:border-slate-700">
-          © 2026 GilmierDev
-        </footer>
       </div>
     </div>
   )

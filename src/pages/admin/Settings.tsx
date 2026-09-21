@@ -11,7 +11,10 @@ import {
   KeyRound,
   Moon,
   Sun,
-  ImageIcon
+  ImageIcon,
+  Sparkles,
+  Code2,
+  Wand2
 } from 'lucide-react'
 import { useAppStore, applyTheme } from '../../stores/app'
 import Input from '../../components/ui/Input'
@@ -366,11 +369,25 @@ export default function SettingsPage() {
         </section>
       )}
 
-      <section className="rounded-xl border border-slate-200 bg-surface p-6 shadow-card dark:border-slate-700">
-        <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-foreground">
-          <SettingsIcon className="h-4 w-4 text-primary-500" /> Publisher
+      <section className="relative overflow-hidden rounded-xl border border-slate-200 bg-surface p-6 shadow-card dark:border-slate-700">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-gradient-to-br from-primary-200/50 to-primary-500/10 blur-2xl" />
+        <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-foreground">
+          <Sparkles className="h-4 w-4 text-primary-500" /> Publisher
         </h2>
-        <p className="text-sm font-medium text-foreground">gilmierDev software & ai Developer</p>
+        <div className="relative flex flex-wrap items-center gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 text-lg font-bold text-white shadow-lg shadow-primary-500/30">
+            GD
+          </div>
+          <div className="min-w-0">
+            <p className="text-base font-semibold text-foreground">GilmierDev</p>
+            <p className="text-sm text-muted">Creator of this software and your friendly neighborhood developer.</p>
+          </div>
+        </div>
+        <div className="relative mt-5 flex flex-wrap gap-2">
+          <Badge tone="primary" icon={Code2}>Software Developer</Badge>
+          <Badge tone="info" icon={Sparkles}>AI Developer</Badge>
+          <Badge tone="warning" icon={Wand2}>Prompt Engineer</Badge>
+        </div>
       </section>
 
       <ConfirmDialog

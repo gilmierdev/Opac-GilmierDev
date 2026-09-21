@@ -14,6 +14,7 @@ import { configStore } from './config.service'
 import { networkService } from './server.service'
 import { networkAdminService } from './network-admin.service'
 import { bookImageService } from './book-image.service'
+import { bookImportService } from './book-import.service'
 import { backupService } from './backup.service'
 import type { Services } from '../ipc/types'
 import type { DatabaseStatus } from '@shared/types'
@@ -75,6 +76,8 @@ export function buildAdminServices(
       getLibraryName: () => settings.getAll().then((s) => s.library_name)
     })
 
+    const importer = bookImportService(db, repo)
+
     const databaseService = {
       async status(): Promise<DatabaseStatus> {
         const [schemaVersion, libraryName] = await Promise.all([
@@ -121,7 +124,9 @@ export function buildAdminServices(
         update: (id, input) => repo.books.update(id, input),
         archive: (id) => repo.books.archive(id),
         restore: (id) => repo.books.restore(id),
-        stats: () => repo.books.dashboardStats()
+        stats: () => repo.books.dashboardStats(),
+        importParse: (input) => importer.parse(input),
+        importRun: (input) => importer.run(input)
       },
       authors: repo.authors,
       categories: repo.categories,

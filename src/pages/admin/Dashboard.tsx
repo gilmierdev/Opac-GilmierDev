@@ -36,16 +36,16 @@ function StatCard({
   const inner = (
     <div
       className={classNames(
-        'flex items-start justify-between rounded-xl border p-4 shadow-card dark:border-slate-700',
+        'group flex items-start justify-between rounded-2xl border p-4 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lifted dark:border-slate-700',
         tone
       )}
     >
       <div>
-        <p className="text-xs font-medium text-muted">{label}</p>
-        <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
+        <p className="mt-1.5 text-3xl font-bold tracking-tight text-foreground">{value}</p>
       </div>
-      <span className="rounded-lg bg-surface p-2 shadow-sm">
-        <Icon className="h-5 w-5 text-primary-500" />
+      <span className="rounded-xl bg-surface p-2.5 shadow-sm ring-1 ring-slate-100 transition-transform duration-200 group-hover:scale-105 dark:ring-slate-700">
+        <Icon className="h-5 w-5 text-primary-600 dark:text-primary-400" />
       </span>
     </div>
   )
@@ -85,20 +85,32 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">
+      <div className="animate-fade-in">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
           Welcome{user ? ` back, ${user.full_name ?? user.username}` : ''}
         </h1>
-        <p className="mt-1 text-sm text-muted">Here's what's happening in your library today.</p>
+        <p className="mt-1.5 text-sm text-muted">Here's what's happening in your library today.</p>
       </div>
 
       <Link
         to="/admin/network"
-        className="ring-focus flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-surface p-4 shadow-card dark:border-slate-700"
+        className={classNames(
+          'ring-focus relative flex items-center justify-between gap-4 overflow-hidden rounded-2xl border p-4 shadow-card transition-all hover:shadow-lifted dark:border-slate-700',
+          server?.running
+            ? 'border-green-200 bg-gradient-to-r from-green-50 to-transparent dark:border-green-800/50 dark:from-green-900/20'
+            : 'border-slate-200 bg-surface dark:border-slate-700'
+        )}
       >
-        <div className="flex items-center gap-3">
-          <span className="rounded-lg bg-primary-50 p-2 dark:bg-primary-900/30">
-            <NetworkIcon className="h-5 w-5 text-primary-500" />
+        <div className="flex items-center gap-4">
+          <span
+            className={classNames(
+              'flex h-11 w-11 items-center justify-center rounded-xl shadow-sm',
+              server?.running
+                ? 'bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-300'
+                : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+            )}
+          >
+            <NetworkIcon className="h-5 w-5" />
           </span>
           <div>
             <p className="text-sm font-semibold text-foreground">Network Server</p>
@@ -133,12 +145,15 @@ export default function Dashboard() {
         <StatsOverdue value={stats.overdueBooks} />
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-surface p-5 shadow-card dark:border-slate-700">
+      <div className="card animate-fade-in p-5">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
-            <Clock className="h-4 w-4 text-primary-500" /> Recently Added Books
+            <span className="rounded-lg bg-primary-50 p-1.5 dark:bg-primary-900/30">
+              <Clock className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+            </span>
+            Recently Added Books
           </h2>
-          <Link to="/admin/books" className="ring-focus text-sm font-medium text-primary-600 hover:underline dark:text-primary-300">
+          <Link to="/admin/books" className="ring-focus text-sm font-semibold text-primary-600 hover:underline dark:text-primary-300">
             View all →
           </Link>
         </div>
@@ -154,10 +169,12 @@ export default function Dashboard() {
           <ul className="divide-y divide-slate-100 dark:divide-slate-800">
             {recent.map((book: Book) => (
               <li key={book.id}>
-                <Link to={`/admin/books/${book.id}/edit`} className="ring-focus flex items-center gap-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                <Link to={`/admin/books/${book.id}/edit`} className="ring-focus group flex items-center gap-4 py-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/40">
                   <BookCover filename={book.cover_image} title={book.title} sizes="sm" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-foreground">{book.title}</p>
+                    <p className="truncate text-sm font-semibold text-foreground transition-colors group-hover:text-primary-600 dark:group-hover:text-primary-300">
+                      {book.title}
+                    </p>
                     <p className="text-xs text-muted">
                       {book.author_name ?? 'Unknown Author'} · {book.category_name ?? 'Uncategorized'}
                     </p>
@@ -184,16 +201,16 @@ function StatsOverdue({ value }: { value: number }) {
   return (
     <Link
       to="/admin/borrowings?status=overdue"
-      className="ring-focus block rounded-xl border border-slate-200 p-4 shadow-card dark:border-slate-700 dark:bg-slate-800/60"
+      className="ring-focus group block rounded-2xl border border-slate-200 bg-surface p-4 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lifted dark:border-slate-700 dark:bg-slate-800/60"
     >
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-xs font-medium text-muted">Overdue</p>
-          <p className={classNames('mt-1 text-2xl font-bold', value > 0 ? 'text-red-600' : 'text-foreground')}>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Overdue</p>
+          <p className={classNames('mt-1.5 text-3xl font-bold tracking-tight', value > 0 ? 'text-red-600' : 'text-foreground')}>
             {value}
           </p>
         </div>
-        <span className="rounded-lg bg-surface p-2 shadow-sm">
+        <span className="rounded-xl bg-surface p-2.5 shadow-sm ring-1 ring-slate-100 transition-transform duration-200 group-hover:scale-105 dark:ring-slate-700">
           <AlertTriangle className={classNames('h-5 w-5', value > 0 ? 'text-red-500' : 'text-muted')} />
         </span>
       </div>

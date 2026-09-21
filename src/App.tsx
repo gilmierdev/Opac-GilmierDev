@@ -43,7 +43,7 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/" element={<StartScreen />} />
+      <Route path="/" element={mode === 'user' && connection ? <Navigate to="/catalog" replace /> : <StartScreen />} />
       <Route path="/catalog" element={<Home />} />
       <Route path="/catalog/advanced" element={<AdvancedSearch />} />
       <Route path="/catalog/book/:id" element={<BookDetails />} />

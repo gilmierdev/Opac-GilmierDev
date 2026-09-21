@@ -1,5 +1,5 @@
 import { IPC } from '@shared/api'
-import type { BookFilters, BookInput } from '@shared/types'
+import type { BookFilters, BookInput, ImportTaskInput } from '@shared/types'
 import { registerIpc } from './register'
 import { requireService } from './util'
 import type { Services } from './types'
@@ -31,6 +31,15 @@ export function registerBooksIpc({ books, isAuthenticated }: Services): void {
     return svc.restore(id)
   }, { context: ctx, requireAuth: true })
   registerIpc(IPC.booksStats, () => svc.stats(), { context: ctx })
+  registerIpc(IPC.booksImportParse, (input: ImportTaskInput) => {
+    if (!svc.importParse) throw new Error('Import is not available')
+    return svc.importParse(input)
+  }, { context: ctx, requireAuth: true })
+  registerIpc(IPC.booksImportRun, (input: ImportTaskInput) => {
+    if (!svc.importRun) throw new Error('Import is not available')
+    validateImportInput(input)
+    return svc.importRun(input)
+  }, { context: ctx, requireAuth: true })
 }
 
 function sanitizeBookFilters(filters: BookFilters): BookFilters {
@@ -40,6 +49,19 @@ function sanitizeBookFilters(filters: BookFilters): BookFilters {
   if (out.author_id != null && typeof out.author_id !== 'number') out.author_id = undefined
   if (out.publisher_id != null && typeof out.publisher_id !== 'number') out.publisher_id = undefined
   return out
+}
+
+function validateImportInput(input: ImportTaskInput): void {
+  if (!input || typeof input !== 'object') throw new Error('Invalid request')
+  if (typeof input.fileName !== 'string' || !input.fileName) throw new Error('Missing file name')
+  if (!(input.data instanceof ArrayBuffer || input.data instanceof Uint8Array)) {
+    throw new Error('Missing file data')
+  }
+  if (input.data.byteLength > 100 * 1024 * 1024) throw new Error('File is too large (max 100 MB)')
+  if (!input.columnMap || typeof input.columnMap !== 'object') throw new Error('Missing column mapping')
+  if (typeof input.columnMap.title !== 'string' || !input.columnMap.title.trim()) {
+    throw new Error('Map the Title column before importing')
+  }
 }
 
 function validateBookInput(input: BookInput): void {

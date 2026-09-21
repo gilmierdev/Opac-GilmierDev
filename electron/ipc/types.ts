@@ -19,6 +19,9 @@ import type {
   DatabaseStatus,
   DashboardStats,
   ImageResult,
+  ImportRunResult,
+  ImportSheetPreview,
+  ImportTaskInput,
   InstallInfo,
   NetworkAccessInfo,
   Paginated,
@@ -39,6 +42,8 @@ export interface BooksService {
   archive(id: number): Promise<Book>
   restore(id: number): Promise<Book>
   stats(): Promise<DashboardStats>
+  importParse?(input: Omit<ImportTaskInput, 'columnMap' | 'options'>): Promise<ImportSheetPreview>
+  importRun?(input: ImportTaskInput): Promise<ImportRunResult>
 }
 
 export interface AuthorsService {

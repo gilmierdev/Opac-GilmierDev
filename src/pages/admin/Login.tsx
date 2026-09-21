@@ -71,17 +71,17 @@ export default function Login() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-app px-6">
-      <div className="w-full max-w-sm">
+      <div className="w-full max-w-sm animate-rise-in">
         <div className="mb-6 flex flex-col items-center text-center">
           {logo ? (
-            <img src={logo} alt="Library logo" className="h-16 w-16 rounded-2xl object-cover shadow-card" />
+            <img src={logo} alt="Library logo" className="h-20 w-20 rounded-2xl object-cover shadow-lifted ring-1 ring-slate-200 dark:ring-slate-700" />
           ) : (
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-600 to-primary-800 shadow-card">
-              <LibraryBig className="h-8 w-8 text-white" />
+            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-primary-800 shadow-glow">
+              <LibraryBig className="h-10 w-10 text-white" />
             </div>
           )}
-          <h1 className="mt-3 text-xl font-bold text-foreground">{settings.library_name}</h1>
-          <p className="text-sm text-muted">
+          <h1 className="mt-4 text-2xl font-bold tracking-tight text-foreground">{settings.library_name}</h1>
+          <p className="text-sm font-medium text-primary-600 dark:text-primary-400">
             {mode === 'setup' ? 'Create the administrator account' : 'Administrator sign in'}
           </p>
         </div>

@@ -12,6 +12,9 @@ import type {
   CategoryInput,
   ChangePasswordInput,
   CreateAdminInput,
+  ImportRunResult,
+  ImportSheetPreview,
+  ImportTaskInput,
   PublisherInput,
   SettingsMap
 } from '../shared/types'
@@ -84,7 +87,9 @@ const api: LibraryApi = {
     update: (id: number, input: BookInput) => invoke(IPC.booksUpdate, id, input),
     archive: (id: number) => invoke(IPC.booksArchive, id),
     restore: (id: number) => invoke(IPC.booksRestore, id),
-    stats: () => invoke(IPC.booksStats)
+    stats: () => invoke(IPC.booksStats),
+    importParse: (input: Omit<ImportTaskInput, 'columnMap' | 'options'>) => invoke<ImportSheetPreview>(IPC.booksImportParse, input),
+    importRun: (input: ImportTaskInput) => invoke<ImportRunResult>(IPC.booksImportRun, input)
   },
 
   authors: {

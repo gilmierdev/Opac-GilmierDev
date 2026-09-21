@@ -18,10 +18,9 @@
     "composite": true,
     "declaration": true,
     "outDir": "./out/ts-web",
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@shared/*": ["shared/*"]
+      "@/*": ["./src/*"],
+      "@shared/*": ["./shared/*"]
     }
   },
   "include": [

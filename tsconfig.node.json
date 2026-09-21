@@ -17,9 +17,8 @@
     "composite": true,
     "declaration": true,
     "outDir": "./out/ts-node",
-    "baseUrl": ".",
     "paths": {
-      "@shared/*": ["shared/*"]
+      "@shared/*": ["./shared/*"]
     }
   },
   "include": [

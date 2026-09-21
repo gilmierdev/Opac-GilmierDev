@@ -22,6 +22,9 @@ import type {
   DashboardStats,
   DatabaseStatus,
   ImageResult,
+  ImportRunResult,
+  ImportSheetPreview,
+  ImportTaskInput,
   InstallInfo,
   NetworkAccessInfo,
   Paginated,
@@ -68,6 +71,8 @@ export const IPC = {
   booksArchive: 'books:archive',
   booksRestore: 'books:restore',
   booksStats: 'books:stats',
+  booksImportParse: 'books:import-parse',
+  booksImportRun: 'books:import-run',
 
   authorsList: 'authors:list',
   authorsCreate: 'authors:create',
@@ -150,6 +155,8 @@ export interface LibraryApi {
     archive(id: number): Promise<Book>
     restore(id: number): Promise<Book>
     stats(): Promise<DashboardStats>
+    importParse(input: Omit<ImportTaskInput, 'columnMap' | 'options'>): Promise<ImportSheetPreview>
+    importRun(input: ImportTaskInput): Promise<ImportRunResult>
   }
 
   authors: {

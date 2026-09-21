@@ -103,6 +103,60 @@ export type BookSort =
 
 export type AvailabilityFilter = 'all' | 'available' | 'unavailable'
 
+/** A parsed spreadsheet: headers + a bounded preview of raw rows. */
+export interface ImportSheetPreview {
+  fileName: string
+  sheetName: string
+  headers: string[]
+  rows: string[][]
+  totalRows: number
+}
+
+/** Which source column maps to each book field (column headers). null = ignore/unmapped. */
+export interface ImportColumnMap {
+  title: string | null
+  author: string | null
+  category: string | null
+  publisher: string | null
+  isbn: string | null
+  year: string | null
+  copies: string | null
+  description: string | null
+}
+
+export interface ImportOptions {
+  /** Auto-create missing authors/categories/publishers by name. */
+  createAuthors: boolean
+  createCategories: boolean
+  createPublishers: boolean
+  /** Skip rows whose (normalised title + ISBN) already exist in the catalog. */
+  skipDuplicates: boolean
+}
+
+export interface ImportTaskInput {
+  fileName: string
+  data: ArrayBuffer | Uint8Array
+  sheetName?: string | null
+  columnMap: ImportColumnMap
+  options: ImportOptions
+}
+
+export interface ImportRowError {
+  row: number
+  title?: string
+  message: string
+}
+
+export interface ImportRunResult {
+  totalRows: number
+  imported: number
+  skippedDuplicates: number
+  createdAuthors: number
+  createdCategories: number
+  createdPublishers: number
+  errors: ImportRowError[]
+}
+
 export interface BookFilters {
   search?: string | null
   category_id?: number | null

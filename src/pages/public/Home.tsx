@@ -108,29 +108,35 @@ export default function Home() {
   return (
     <PublicLayout showBack={false}>
       {/* Hero search */}
-      <section className="border-b border-slate-200 bg-surface dark:border-slate-700">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-          <h1 className="text-xl font-bold text-foreground sm:text-2xl">Find a book in our library</h1>
-          <form onSubmit={onSearchSubmit} className="mt-4 flex gap-2">
+      <section className="relative overflow-hidden border-b border-slate-200 bg-surface dark:border-slate-700">
+        <div className="pointer-events-none absolute -top-24 left-1/2 h-64 w-[42rem] -translate-x-1/2 rounded-full bg-gradient-to-br from-primary-200/60 to-primary-400/10 blur-3xl" />
+        <div className="relative mx-auto max-w-7xl px-4 py-10 sm:px-6">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            Find a book in our library
+          </h1>
+          <p className="mt-1.5 text-sm text-muted">
+            Search by title, author, ISBN, subject, or keyword across the whole collection.
+          </p>
+          <form onSubmit={onSearchSubmit} className="mt-5 flex gap-2">
             <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
               <input
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Search title, author, ISBN, subject…"
-                className="ring-focus w-full rounded-xl border border-slate-300 bg-surface py-3 pl-11 pr-4 text-sm text-foreground shadow-card placeholder:text-muted/70 dark:border-slate-600"
+                className="ring-focus w-full rounded-2xl border border-slate-300 bg-surface py-3.5 pl-12 pr-4 text-sm text-foreground shadow-lifted placeholder:text-muted/70 focus:border-primary-500 dark:border-slate-600"
               />
             </div>
             <button
               type="submit"
-              className="ring-focus rounded-xl bg-primary-600 px-5 text-sm font-semibold text-white hover:bg-primary-700"
+              className="ring-focus rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 px-6 text-sm font-semibold text-white shadow-card transition-all hover:shadow-lifted hover:brightness-105"
             >
               Search
             </button>
             <button
               type="button"
               onClick={() => navigate('/catalog/advanced')}
-              className="ring-focus inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-surface px-4 text-sm font-medium text-foreground hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
+              className="ring-focus inline-flex items-center gap-1.5 rounded-2xl border border-slate-300 bg-surface px-4 text-sm font-medium text-foreground hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
             >
               <SlidersHorizontal className="h-4 w-4" />
               <span className="hidden sm:inline">Advanced</span>
@@ -138,12 +144,12 @@ export default function Home() {
           </form>
 
           {/* Category chips */}
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div className="mt-6 flex flex-wrap gap-2">
             <button
               onClick={() => onQuickSearch('')}
-              className={`ring-focus rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${
+              className={`ring-focus rounded-full px-4 py-1.5 text-xs font-semibold transition-all ${
                 !searchQuery && !categoryId
-                  ? 'bg-primary-600 text-white'
+                  ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-card'
                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
               }`}
             >
@@ -153,9 +159,9 @@ export default function Home() {
               <button
                 key={c.id}
                 onClick={() => updateUrl({ category: String(c.id) })}
-                className={`ring-focus rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${
+                className={`ring-focus rounded-full px-4 py-1.5 text-xs font-semibold transition-all ${
                   categoryId === String(c.id)
-                    ? 'bg-primary-600 text-white'
+                    ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-card'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
                 }`}
               >
@@ -228,7 +234,7 @@ export default function Home() {
           />
         ) : (
           <>
-            <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5">
+            <div className="mt-4 grid animate-fade-in grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5">
               {books.map((book) => (
                 <BookCard key={book.id} book={book} />
               ))}
