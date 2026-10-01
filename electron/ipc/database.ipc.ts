@@ -9,4 +9,8 @@ export function registerDatabaseIpc({ database, isAuthenticated }: Services): vo
   registerIpc(IPC.databaseStatus, () => requireService(database, 'Database status').status(), {
     context: ctx
   })
+  registerIpc(IPC.databaseClearCatalog, () => requireService(database, 'Database').clearCatalog(), {
+    context: ctx,
+    requireAuth: true
+  })
 }

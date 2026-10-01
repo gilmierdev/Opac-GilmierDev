@@ -35,10 +35,6 @@ export function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export function titleCase(value: string): string {
-  return value.replace(/\b\w/g, (c) => c.toUpperCase())
-}
-
 export function todayDateInput(): string {
   const d = new Date()
   const yyyy = d.getFullYear()

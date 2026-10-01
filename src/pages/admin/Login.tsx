@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { KeyRound, UserRound, Eye, EyeOff, ShieldCheck, LibraryBig } from 'lucide-react'
+import { KeyRound, UserRound, Eye, EyeOff, ShieldCheck, LibraryBig, Key, CheckCircle2 } from 'lucide-react'
 import { useAppStore } from '../../stores/app'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
+import Modal from '../../components/ui/Modal'
 import Spinner from '../../components/ui/Spinner'
 import { imageUrl, errorMessage } from '../../lib/utils'
 
@@ -29,6 +30,16 @@ export default function Login() {
   const [showPass, setShowPass] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  // Forgot password / Developer recovery states
+  const [forgotOpen, setForgotOpen] = useState(false)
+  const [pin, setPin] = useState('')
+  const [forgotUsername, setForgotUsername] = useState('')
+  const [newPass, setNewPass] = useState('')
+  const [confirmNewPass, setConfirmNewPass] = useState('')
+  const [forgotBusy, setForgotBusy] = useState(false)
+  const [forgotError, setForgotError] = useState<string | null>(null)
+  const [forgotSuccess, setForgotSuccess] = useState<string | null>(null)
 
   useEffect(() => {
     void window.api.auth
@@ -65,6 +76,45 @@ export default function Login() {
       setError(errorMessage(err))
     } finally {
       setBusy(false)
+    }
+  }
+
+  const handleRecoverPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setForgotError(null)
+    setForgotSuccess(null)
+    if (!pin.trim()) {
+      setForgotError('Please enter the developer recovery PIN.')
+      return
+    }
+    if (newPass.length < 8) {
+      setForgotError('New password must be at least 8 characters.')
+      return
+    }
+    if (newPass !== confirmNewPass) {
+      setForgotError('Passwords do not match.')
+      return
+    }
+    setForgotBusy(true)
+    try {
+      if (typeof window.api?.auth?.recoverPassword !== 'function') {
+        throw new Error('Please restart the application to apply the new recovery update.')
+      }
+      const res = await window.api.auth.recoverPassword({
+        pin: pin.trim(),
+        newPassword: newPass,
+        username: forgotUsername.trim() || undefined
+      })
+      setForgotSuccess(`Password for "${res.username}" has been reset successfully! You can now sign in with your new password.`)
+      setUsername(res.username)
+      setPassword(newPass)
+      setTimeout(() => {
+        setForgotOpen(false)
+      }, 1800)
+    } catch (err) {
+      setForgotError(errorMessage(err))
+    } finally {
+      setForgotBusy(false)
     }
   }
 
@@ -138,6 +188,25 @@ export default function Login() {
               {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
+          {mode === 'login' && (
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setForgotOpen(true)
+                  setForgotError(null)
+                  setForgotSuccess(null)
+                  setPin('')
+                  setForgotUsername(username || 'admin')
+                  setNewPass('')
+                  setConfirmNewPass('')
+                }}
+                className="ring-focus text-xs font-medium text-primary-600 hover:underline"
+              >
+                Forgot password?
+              </button>
+            </div>
+          )}
           {mode === 'setup' && (
             <Input
               label="Confirm Password"
@@ -167,6 +236,86 @@ export default function Login() {
             <LibraryBig className="h-3.5 w-3.5 text-primary-500" /> View public catalog
           </Link>
         </p>
+
+        <Modal
+          open={forgotOpen}
+          onClose={() => setForgotOpen(false)}
+          title="Recover Administrator Access"
+          maxWidth="md"
+        >
+          <form onSubmit={handleRecoverPassword} className="space-y-4">
+            <div className="rounded-xl border border-primary-100 bg-primary-50/60 p-3.5 text-xs text-primary-800">
+              <p className="font-semibold flex items-center gap-1.5">
+                <Key className="h-4 w-4 text-primary-600" /> Developer Emergency Recovery
+              </p>
+              <p className="mt-1 text-muted">
+                Enter your configured Developer Recovery PIN to verify authorized access and set a new password.
+              </p>
+            </div>
+
+            <Input
+              label="Developer PIN *"
+              name="pin"
+              type="password"
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
+              placeholder="Enter developer PIN"
+              required
+              autoFocus
+            />
+
+            <Input
+              label="Username (optional)"
+              name="forgotUsername"
+              value={forgotUsername}
+              onChange={(e) => setForgotUsername(e.target.value)}
+              placeholder="admin (defaults to primary administrator)"
+            />
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Input
+                label="New Password *"
+                name="newPass"
+                type="password"
+                value={newPass}
+                onChange={(e) => setNewPass(e.target.value)}
+                placeholder="At least 8 characters"
+                required
+              />
+              <Input
+                label="Confirm Password *"
+                name="confirmNewPass"
+                type="password"
+                value={confirmNewPass}
+                onChange={(e) => setConfirmNewPass(e.target.value)}
+                placeholder="Re-enter password"
+                required
+              />
+            </div>
+
+            {forgotError && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-600">
+                {forgotError}
+              </p>
+            )}
+
+            {forgotSuccess && (
+              <div className="flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 text-xs font-medium text-green-700">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
+                <span>{forgotSuccess}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+              <Button type="button" variant="outline" onClick={() => setForgotOpen(false)} disabled={forgotBusy}>
+                Cancel
+              </Button>
+              <Button type="submit" loading={forgotBusy} icon={<KeyRound className="h-4 w-4" />}>
+                Reset Password
+              </Button>
+            </div>
+          </form>
+        </Modal>
       </div>
     </div>
   )

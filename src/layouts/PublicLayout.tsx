@@ -6,7 +6,6 @@ import { imageUrl } from '../lib/utils'
 
 interface PublicLayoutProps {
   children: ReactNode
-  onCloseCatalog?: () => void
   showBack?: boolean
 }
 

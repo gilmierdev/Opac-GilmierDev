@@ -20,6 +20,7 @@ import Textarea from '../../components/ui/Textarea'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
+import GitHubConfirmModal from '../../components/ui/GitHubConfirmModal'
 import Spinner from '../../components/ui/Spinner'
 import type { BackupFile } from '@shared/types'
 import { errorMessage, formatDate, formatFileSize, imageUrl } from '../../lib/utils'
@@ -41,6 +42,7 @@ export default function SettingsPage() {
   const [creatingBackup, setCreatingBackup] = useState(false)
   const [restoreTarget, setRestoreTarget] = useState<BackupFile | null>(null)
   const [restoring, setRestoring] = useState(false)
+  const [deleteDataOpen, setDeleteDataOpen] = useState(false)
 
   const [pwCurrent, setPwCurrent] = useState('')
   const [pwNew, setPwNew] = useState('')
@@ -148,6 +150,18 @@ export default function SettingsPage() {
       await loadBackups()
     } catch (err) {
       setMsg(`Restore error: ${errorMessage(err)}`)
+    }
+  }
+
+  const handleClearCatalog = async () => {
+    try {
+      if (typeof window.api?.database?.clearCatalog !== 'function') {
+        throw new Error('Please restart the application to apply the catalog clearing update.')
+      }
+      await window.api.database.clearCatalog()
+      setMsg('All library catalog data (books, copies, authors, categories, publishers, borrowings) has been permanently deleted.')
+    } catch (err) {
+      setMsg(`Error deleting data: ${errorMessage(err)}`)
     }
   }
 
@@ -369,6 +383,23 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {/* Danger Zone: Delete Data */}
+      <section className="rounded-xl border border-red-200 bg-surface p-6 shadow-card">
+        <h2 className="mb-2 flex items-center gap-2 text-base font-semibold text-red-600">
+          <Trash2 className="h-4 w-4 text-red-600" /> Danger Zone: Delete Catalog Data
+        </h2>
+        <p className="mb-4 text-sm text-muted">
+          Permanently delete all catalog records including books, copies, authors, categories, publishers, and circulation logs. Administrator accounts and application settings will be preserved.
+        </p>
+        <Button
+          variant="danger"
+          onClick={() => setDeleteDataOpen(true)}
+          icon={<Trash2 className="h-4 w-4" />}
+        >
+          Delete All Catalog Data…
+        </Button>
+      </section>
+
       <ConfirmDialog
         open={!!restoreTarget}
         title="Restore backup"
@@ -382,6 +413,16 @@ export default function SettingsPage() {
         loading={restoring}
         onConfirm={handleRestore}
         onCancel={() => setRestoreTarget(null)}
+      />
+
+      <GitHubConfirmModal
+        open={deleteDataOpen}
+        title="Delete All Library Catalog Data"
+        description="This will permanently delete all books, borrowings, categories, authors, and publishers from your local database. Your administrator login will remain active. This action cannot be undone."
+        matchText="delete all data"
+        confirmButtonText="I understand the consequences, delete all data"
+        onConfirm={handleClearCatalog}
+        onClose={() => setDeleteDataOpen(false)}
       />
     </div>
   )

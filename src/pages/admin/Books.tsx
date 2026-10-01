@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search, Plus, Pencil, ArchiveRestore, BookOpen, X, ArrowUpDown, FileSpreadsheet } from 'lucide-react'
+import { Search, Plus, Pencil, ArchiveRestore, BookOpen, X, ArrowUpDown, FileSpreadsheet, Trash2 } from 'lucide-react'
 import Spinner from '../../components/ui/Spinner'
 import EmptyState from '../../components/ui/EmptyState'
 import Pagination from '../../components/ui/Pagination'
@@ -9,6 +9,7 @@ import Select from '../../components/ui/Select'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import ImportBooksModal from '../../components/ImportBooksModal'
 import BookModal from '../../components/BookModal'
+import GitHubConfirmModal from '../../components/ui/GitHubConfirmModal'
 import BookCover from '../../components/BookCover'
 import type { AuthorListItem, Book, BookFilters, CategoryListItem } from '@shared/types'
 import { errorMessage } from '../../lib/utils'
@@ -34,6 +35,7 @@ export default function Books() {
   const [authors, setAuthors] = useState<AuthorListItem[]>([])
 
   const [target, setTarget] = useState<Book | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Book | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [bookModalOpen, setBookModalOpen] = useState(false)
   const [editingBookId, setEditingBookId] = useState<number | null>(null)
@@ -110,6 +112,20 @@ export default function Books() {
         await window.api.books.archive(target.id)
       }
       setTarget(null)
+      await load()
+    } catch (err) {
+      setError(errorMessage(err))
+    }
+  }
+
+  const handleDeleteBook = async () => {
+    if (!deleteTarget) return
+    try {
+      if (typeof window.api?.books?.delete !== 'function') {
+        throw new Error('Please restart the application to apply the book deletion update.')
+      }
+      await window.api.books.delete(deleteTarget.id)
+      setDeleteTarget(null)
       await load()
     } catch (err) {
       setError(errorMessage(err))
@@ -270,6 +286,13 @@ export default function Books() {
                         >
                           <ArchiveRestore className="h-4 w-4" />
                         </button>
+                        <button
+                          onClick={() => setDeleteTarget(book)}
+                          className="ring-focus rounded-lg p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"
+                          title="Delete book permanently"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -315,6 +338,16 @@ export default function Books() {
           setEditingBookId(null)
         }}
         onSuccess={() => void load()}
+      />
+
+      <GitHubConfirmModal
+        open={!!deleteTarget}
+        title={`Delete "${deleteTarget?.title}"`}
+        description={`This will permanently remove "${deleteTarget?.title}" and its borrowing records from your database. This action cannot be undone.`}
+        matchText={deleteTarget?.title ?? ''}
+        confirmButtonText="I understand the consequences, delete this book"
+        onConfirm={handleDeleteBook}
+        onClose={() => setDeleteTarget(null)}
       />
     </div>
   )

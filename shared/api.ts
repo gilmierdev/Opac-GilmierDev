@@ -56,6 +56,7 @@ export const IPC = {
   networkFirewall: 'network:firewall',
 
   databaseStatus: 'database:status',
+  databaseClearCatalog: 'database:clear-catalog',
 
   authNeedsSetup: 'auth:needs-setup',
   authSetup: 'auth:setup',
@@ -63,6 +64,7 @@ export const IPC = {
   authLogout: 'auth:logout',
   authSession: 'auth:session',
   authChangePassword: 'auth:change-password',
+  authRecoverPassword: 'auth:recover-password',
 
   booksList: 'books:list',
   booksGet: 'books:get',
@@ -70,6 +72,7 @@ export const IPC = {
   booksUpdate: 'books:update',
   booksArchive: 'books:archive',
   booksRestore: 'books:restore',
+  booksDelete: 'books:delete',
   booksStats: 'books:stats',
   booksImportParse: 'books:import-parse',
   booksImportRun: 'books:import-run',
@@ -136,6 +139,7 @@ export interface LibraryApi {
 
   database: {
     status(): Promise<DatabaseStatus>
+    clearCatalog(): Promise<void>
   }
 
   auth: {
@@ -145,6 +149,7 @@ export interface LibraryApi {
     logout(): Promise<void>
     session(): Promise<AdminUser | null>
     changePassword(input: ChangePasswordInput): Promise<void>
+    recoverPassword(input: { pin: string; newPassword: string; username?: string }): Promise<{ username: string }>
   }
 
   books: {
@@ -154,6 +159,7 @@ export interface LibraryApi {
     update(id: number, input: BookInput): Promise<Book>
     archive(id: number): Promise<Book>
     restore(id: number): Promise<Book>
+    delete(id: number): Promise<void>
     stats(): Promise<DashboardStats>
     importParse(input: Omit<ImportTaskInput, 'columnMap' | 'options'>): Promise<ImportSheetPreview>
     importRun(input: ImportTaskInput): Promise<ImportRunResult>

@@ -8,6 +8,7 @@ import { repositories, type Repositories } from './database/pg/repositories'
 import { authService, type AuthService } from './services/auth.service'
 import { backupService } from './services/backup.service'
 import type { Db } from './database/pg/client'
+import { DEVELOPER_RECOVERY_PIN } from '../shared/constants'
 
 interface SmokeOptions {
   dir: string
@@ -245,6 +246,14 @@ export async function runSmoke(options: SmokeOptions): Promise<void> {
     await repo.books.restore(book.id)
     assert((await repo.books.getById(book.id))?.is_archived === false, 'book restored')
 
+    // ---- Delete book ----
+    await repo.books.delete(book.id)
+    assert((await repo.books.getById(book.id)) === null, 'book permanently deleted')
+
+    // ---- Clear catalog ----
+    await repo.books.clearCatalog()
+    assert((await repo.books.countAll()) === 0, 'all catalog data permanently cleared')
+
     // ---- Security hardening: no trust auth in pg_hba.conf ----
     assertHbaNoTrust(prov.clientAuthConfigPath())
 
@@ -290,4 +299,18 @@ async function testAuth(repo: Repositories): Promise<void> {
   assert((await auth.login('admin', 'NewStrongPass1')).username === 'admin', 'login succeeds with new password')
   await auth.logout()
   assert((await auth.getSession()) === null, 'session cleared after logout')
+
+  // Developer PIN password recovery
+  let wrongPinThrew = false
+  try {
+    await auth.recoverPassword('wrong-pin-00', 'RecoveredPass1', 'admin')
+  } catch {
+    wrongPinThrew = true
+  }
+  assert(wrongPinThrew, 'recovery with invalid PIN must be rejected')
+
+  const recoveredUser = await auth.recoverPassword(DEVELOPER_RECOVERY_PIN, 'RecoveredPass1', 'admin')
+  assert(recoveredUser.username === 'admin', 'recovery resets password successfully')
+  assert((await auth.login('admin', 'RecoveredPass1')).username === 'admin', 'login succeeds with recovered password')
+  await auth.logout()
 }

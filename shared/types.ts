@@ -350,10 +350,6 @@ export interface NetworkAccessInfo {
   suggestedFirewallCommand: string
 }
 
-export interface BackupCreateInput {
-  location?: string | null
-}
-
 export interface BackupRestoreResult {
   restored: boolean
   message?: string

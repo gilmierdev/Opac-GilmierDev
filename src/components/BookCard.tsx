@@ -9,7 +9,7 @@ interface BookCardProps {
 }
 
 export default function BookCard({ book, admin = false }: BookCardProps) {
-  const href = admin ? `/admin/books/${book.id}/edit` : `/catalog/book/${book.id}`
+  const href = admin ? `/admin/books?edit=${book.id}` : `/catalog/book/${book.id}`
   return (
     <Link
       to={href}

@@ -30,6 +30,10 @@ export function registerBooksIpc({ books, isAuthenticated }: Services): void {
     if (!Number.isInteger(id) || id <= 0) throw new Error('Invalid book id')
     return svc.restore(id)
   }, { context: ctx, requireAuth: true })
+  registerIpc(IPC.booksDelete, (id: number) => {
+    if (!Number.isInteger(id) || id <= 0) throw new Error('Invalid book id')
+    return svc.delete(id)
+  }, { context: ctx, requireAuth: true })
   registerIpc(IPC.booksStats, () => svc.stats(), { context: ctx })
   registerIpc(IPC.booksImportParse, (input: ImportTaskInput) => {
     if (!svc.importParse) throw new Error('Import is not available')

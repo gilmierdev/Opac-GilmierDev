@@ -53,6 +53,20 @@ export function registerAuthIpc({ auth, isAuthenticated, broadcastSession }: Ser
     },
     { context: ctx, requireAuth: true }
   )
+  registerIpc(
+    IPC.authRecoverPassword,
+    (input: { pin: string; newPassword: string; username?: string }) => {
+      if (!input || typeof input !== 'object') throw new Error('Invalid request')
+      if (typeof input.pin !== 'string' || !input.pin.trim()) {
+        throw new Error('Developer recovery PIN is required')
+      }
+      if (typeof input.newPassword !== 'string' || !input.newPassword) {
+        throw new Error('New password is required')
+      }
+      return svc.recoverPassword(input.pin, input.newPassword, input.username)
+    },
+    { context: ctx }
+  )
 }
 
 function validateCreate(input: CreateAdminInput): void {

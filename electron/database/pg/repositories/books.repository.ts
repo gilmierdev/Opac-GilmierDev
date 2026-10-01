@@ -159,6 +159,8 @@ export interface BooksRepository {
   update(id: number, input: BookInput): Promise<Book>
   archive(id: number): Promise<Book>
   restore(id: number): Promise<Book>
+  delete(id: number): Promise<void>
+  clearCatalog(): Promise<void>
   dashboardStats(): Promise<DashboardStats>
   countAll(): Promise<number>
 }
@@ -312,6 +314,21 @@ export function booksRepository(db: Db): BooksRepository {
       const row = await findRow(id)
       if (!row) throw new Error('Failed to restore book')
       return row
+    },
+    async delete(id: number): Promise<void> {
+      const existing = await findRow(id)
+      if (!existing) throw new Error('Book not found')
+      await db.query('DELETE FROM borrowings WHERE book_id = $1', [id])
+      await db.query('DELETE FROM books WHERE id = $1', [id])
+    },
+    async clearCatalog(): Promise<void> {
+      await db.query(`
+        DELETE FROM borrowings;
+        DELETE FROM books;
+        DELETE FROM authors;
+        DELETE FROM categories;
+        DELETE FROM publishers;
+      `)
     },
     async dashboardStats(): Promise<DashboardStats> {
       const totals = (await db.one<{ total_books: number; total_copies: number; available_copies: number }>(

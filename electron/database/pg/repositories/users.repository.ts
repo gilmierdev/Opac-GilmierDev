@@ -23,6 +23,7 @@ export interface UsersRepository {
   createFirstAdmin(input: AdminUserRecord): Promise<AdminUser>
   updatePassword(id: number, passwordHash: string): Promise<void>
   getById(id: number): Promise<AdminUser | null>
+  getFirstAdmin(): Promise<{ id: number; username: string } | null>
   getPasswordHash(id: number): Promise<string | null>
 }
 
@@ -79,6 +80,12 @@ export function usersRepository(db: Db): UsersRepository {
         [id]
       )
       return row ? mapUser(row) : null
+    },
+    async getFirstAdmin(): Promise<{ id: number; username: string } | null> {
+      const row = await db.one<{ id: number | string; username: string }>(
+        'SELECT id, username FROM admin_users ORDER BY id ASC LIMIT 1'
+      )
+      return row ? { id: Number(row.id), username: row.username } : null
     },
     async getPasswordHash(id: number): Promise<string | null> {
       const row = await db.one<{ password_hash: string }>(

@@ -68,7 +68,8 @@ const api: LibraryApi = {
   },
 
   database: {
-    status: () => invoke(IPC.databaseStatus)
+    status: () => invoke(IPC.databaseStatus),
+    clearCatalog: () => invoke<void>(IPC.databaseClearCatalog)
   },
 
   auth: {
@@ -77,7 +78,9 @@ const api: LibraryApi = {
     login: (username: string, password: string) => invoke<AdminUser>(IPC.authLogin, username, password),
     logout: () => invoke<void>(IPC.authLogout),
     session: () => invoke<AdminUser | null>(IPC.authSession),
-    changePassword: (input: ChangePasswordInput) => invoke<void>(IPC.authChangePassword, input)
+    changePassword: (input: ChangePasswordInput) => invoke<void>(IPC.authChangePassword, input),
+    recoverPassword: (input: { pin: string; newPassword: string; username?: string }) =>
+      invoke<{ username: string }>(IPC.authRecoverPassword, input)
   },
 
   books: {
@@ -87,6 +90,7 @@ const api: LibraryApi = {
     update: (id: number, input: BookInput) => invoke(IPC.booksUpdate, id, input),
     archive: (id: number) => invoke(IPC.booksArchive, id),
     restore: (id: number) => invoke(IPC.booksRestore, id),
+    delete: (id: number) => invoke<void>(IPC.booksDelete, id),
     stats: () => invoke(IPC.booksStats),
     importParse: (input: Omit<ImportTaskInput, 'columnMap' | 'options'>) => invoke<ImportSheetPreview>(IPC.booksImportParse, input),
     importRun: (input: ImportTaskInput) => invoke<ImportRunResult>(IPC.booksImportRun, input)

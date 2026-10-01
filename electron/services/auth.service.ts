@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs'
 import type { Repositories } from '../database/pg/repositories'
 import type { AdminUser, CreateAdminInput } from '@shared/types'
+import { DEVELOPER_RECOVERY_PIN } from '@shared/constants'
 import { logger } from '../utils/logger'
 
 const SALT_ROUNDS = 12
@@ -17,6 +18,7 @@ export interface AuthService {
   getSession(): Promise<AdminUser | null>
   isAuthenticated(): Promise<boolean>
   changePassword(currentPassword: string, newPassword: string): Promise<void>
+  recoverPassword(pin: string, newPassword: string, username?: string): Promise<{ username: string }>
   validatePasswordStrength(password: string): string | null
 }
 
@@ -157,6 +159,40 @@ export function authService(repo: Repositories): AuthService {
       sessionUserId = null
       sessionExpiresAt = 0
       logger.info('administrator password changed')
+    },
+
+    async recoverPassword(pin: string, newPassword: string, username?: string): Promise<{ username: string }> {
+      if (pin.trim() !== DEVELOPER_RECOVERY_PIN) {
+        throw new Error('Invalid developer recovery PIN.')
+      }
+      const strengthError = validatePasswordStrength(newPassword)
+      if (strengthError) {
+        throw new Error(strengthError)
+      }
+
+      let targetUser: { id: number; username: string } | null = null
+      if (username?.trim()) {
+        const found = await repo.users.findByUsername(username.trim().toLowerCase())
+        if (found) {
+          const info = await repo.users.getById(found.id)
+          if (info) targetUser = { id: found.id, username: info.username }
+        }
+      }
+
+      if (!targetUser) {
+        targetUser = await repo.users.getFirstAdmin()
+      }
+
+      if (!targetUser) {
+        throw new Error('No administrator account found to recover.')
+      }
+
+      const hash = await bcrypt.hash(newPassword, SALT_ROUNDS)
+      await repo.users.updatePassword(targetUser.id, hash)
+      sessionUserId = null
+      sessionExpiresAt = 0
+      logger.info('administrator password reset via developer PIN', { username: targetUser.username })
+      return { username: targetUser.username }
     },
 
     validatePasswordStrength

@@ -90,6 +90,9 @@ export function buildAdminServices(
           schemaVersion,
           libraryName
         }
+      },
+      async clearCatalog(): Promise<void> {
+        await repo.books.clearCatalog()
       }
     }
 
@@ -124,6 +127,7 @@ export function buildAdminServices(
         update: (id, input) => repo.books.update(id, input),
         archive: (id) => repo.books.archive(id),
         restore: (id) => repo.books.restore(id),
+        delete: (id) => repo.books.delete(id),
         stats: () => repo.books.dashboardStats(),
         importParse: (input) => importer.parse(input),
         importRun: (input) => importer.run(input)

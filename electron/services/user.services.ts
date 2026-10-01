@@ -99,6 +99,9 @@ export function buildUserServices(appDirs: AppDirs): UserServicesResult {
       restore: async () => {
         throw new Error(NOT_AVAILABLE)
       },
+      delete: async () => {
+        throw new Error(NOT_AVAILABLE)
+      },
       stats: async () => {
         const page = await requireRemote(
           fetchJson<Paginated<Book>>(client, '/api/v1/books?page=1&pageSize=6&sort=recent')

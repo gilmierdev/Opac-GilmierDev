@@ -41,6 +41,7 @@ export interface BooksService {
   update(id: number, input: BookInput): Promise<Book>
   archive(id: number): Promise<Book>
   restore(id: number): Promise<Book>
+  delete(id: number): Promise<void>
   stats(): Promise<DashboardStats>
   importParse?(input: Omit<ImportTaskInput, 'columnMap' | 'options'>): Promise<ImportSheetPreview>
   importRun?(input: ImportTaskInput): Promise<ImportRunResult>
@@ -88,6 +89,7 @@ export interface BackupService {
 
 export interface DatabaseService {
   status(): Promise<DatabaseStatus>
+  clearCatalog(): Promise<void>
 }
 
 export interface ConnectionsService {

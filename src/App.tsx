@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { bootstrapApp, useAppStore } from './stores/app'
 import Home from './pages/public/Home'
 import AdvancedSearch from './pages/public/AdvancedSearch'
@@ -8,14 +8,17 @@ import Login from './pages/admin/Login'
 import AdminLayout from './layouts/AdminLayout'
 import Dashboard from './pages/admin/Dashboard'
 import Books from './pages/admin/Books'
-import BookForm from './pages/admin/BookForm'
 import Authors from './pages/admin/Authors'
 import Categories from './pages/admin/Categories'
 import Publishers from './pages/admin/Publishers'
 import Borrowings from './pages/admin/Borrowings'
-import Network from './pages/admin/Network'
 import SettingsPage from './pages/admin/Settings'
 import LoadingScreen from './components/LoadingScreen'
+
+function BookEditRedirect() {
+  const { id } = useParams()
+  return <Navigate to={`/admin/books?edit=${id}`} replace />
+}
 
 export default function App() {
   const ready = useAppStore((s) => s.ready)
@@ -53,12 +56,11 @@ export default function App() {
             <Route index element={<Dashboard />} />
             <Route path="books" element={<Books />} />
             <Route path="books/new" element={<Navigate to="/admin/books?new=true" replace />} />
-            <Route path="books/:id/edit" element={<BookForm />} />
+            <Route path="books/:id/edit" element={<BookEditRedirect />} />
             <Route path="authors" element={<Authors />} />
             <Route path="categories" element={<Categories />} />
             <Route path="publishers" element={<Publishers />} />
             <Route path="borrowings" element={<Borrowings />} />
-            <Route path="network" element={<Network />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
         </>
