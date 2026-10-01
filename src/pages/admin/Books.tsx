@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { Search, Plus, Pencil, ArchiveRestore, BookOpen, X, ArrowUpDown, FileSpreadsheet } from 'lucide-react'
 import Spinner from '../../components/ui/Spinner'
 import EmptyState from '../../components/ui/EmptyState'
@@ -8,6 +8,7 @@ import Badge from '../../components/ui/Badge'
 import Select from '../../components/ui/Select'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import ImportBooksModal from '../../components/ImportBooksModal'
+import BookModal from '../../components/BookModal'
 import BookCover from '../../components/BookCover'
 import type { AuthorListItem, Book, BookFilters, CategoryListItem } from '@shared/types'
 import { errorMessage } from '../../lib/utils'
@@ -15,7 +16,7 @@ import { errorMessage } from '../../lib/utils'
 const PAGE_SIZES = [10, 25, 50]
 
 export default function Books() {
-  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [authorId, setAuthorId] = useState('')
@@ -34,6 +35,36 @@ export default function Books() {
 
   const [target, setTarget] = useState<Book | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [bookModalOpen, setBookModalOpen] = useState(false)
+  const [editingBookId, setEditingBookId] = useState<number | null>(null)
+
+  const openNewBook = () => {
+    setEditingBookId(null)
+    setBookModalOpen(true)
+  }
+
+  const openEditBook = (id: number) => {
+    setEditingBookId(id)
+    setBookModalOpen(true)
+  }
+
+  useEffect(() => {
+    if (searchParams.get('new') === 'true' || searchParams.get('add') === '1') {
+      openNewBook()
+      const next = new URLSearchParams(searchParams)
+      next.delete('new')
+      next.delete('add')
+      setSearchParams(next, { replace: true })
+    } else if (searchParams.get('edit')) {
+      const editId = Number(searchParams.get('edit'))
+      if (!Number.isNaN(editId) && editId > 0) {
+        openEditBook(editId)
+      }
+      const next = new URLSearchParams(searchParams)
+      next.delete('edit')
+      setSearchParams(next, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
 
   useEffect(() => {
     void window.api.categories.list().then(setCategories).catch(() => undefined)
@@ -103,7 +134,7 @@ export default function Books() {
             <FileSpreadsheet className="h-4 w-4 text-primary-600 dark:text-primary-400" /> Import
           </button>
           <button
-            onClick={() => navigate('/admin/books/new')}
+            onClick={openNewBook}
             className="ring-focus inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700"
           >
             <Plus className="h-4 w-4" /> Add Book
@@ -177,7 +208,7 @@ export default function Books() {
           title="No books found"
           description="Adjust the filters, or add a new book to the catalog."
           actionLabel="Add your first book"
-          onAction={() => navigate('/admin/books/new')}
+          onAction={openNewBook}
         />
       ) : (
         <>
@@ -226,15 +257,15 @@ export default function Books() {
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-1">
                         <button
-                          onClick={() => navigate(`/admin/books/${book.id}/edit`)}
-                          className="ring-focus rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-primary-600 dark:hover:bg-slate-800"
+                          onClick={() => openEditBook(book.id)}
+                          className="ring-focus rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-primary-600"
                           title="Edit"
                         >
                           <Pencil className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => setTarget(book)}
-                          className="ring-focus rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-amber-600 dark:hover:bg-slate-800"
+                          className="ring-focus rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-amber-600"
                           title={book.is_archived ? 'Restore' : 'Archive'}
                         >
                           <ArchiveRestore className="h-4 w-4" />
@@ -274,6 +305,16 @@ export default function Books() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         onImported={() => void load()}
+      />
+
+      <BookModal
+        open={bookModalOpen}
+        bookId={editingBookId}
+        onClose={() => {
+          setBookModalOpen(false)
+          setEditingBookId(null)
+        }}
+        onSuccess={() => void load()}
       />
     </div>
   )

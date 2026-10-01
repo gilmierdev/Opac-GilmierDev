@@ -1,9 +1,8 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { LibraryBig, Lock, X, BookMarked } from 'lucide-react'
+import { LibraryBig, Lock, X, BookMarked, RefreshCw } from 'lucide-react'
 import { useAppStore } from '../stores/app'
-import { imageUrl, serverLabel } from '../lib/utils'
-import { classNames } from '../lib/utils'
+import { imageUrl } from '../lib/utils'
 
 interface PublicLayoutProps {
   children: ReactNode
@@ -14,10 +13,23 @@ interface PublicLayoutProps {
 export default function PublicLayout({ children, showBack = false }: PublicLayoutProps) {
   const settings = useAppStore((s) => s.settings)
   const mode = useAppStore((s) => s.mode)
-  const connection = useAppStore((s) => s.connection)
+  const triggerRefresh = useAppStore((s) => s.triggerRefresh)
   const logo = imageUrl(settings.library_logo)
   const location = useLocation()
   const isUser = mode === 'user'
+  const [refreshing, setRefreshing] = useState(false)
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    try {
+      const updated = await window.api.settings.getAll()
+      useAppStore.getState().setSettings(updated)
+    } catch {
+      // ignore
+    }
+    triggerRefresh()
+    setTimeout(() => setRefreshing(false), 500)
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-app">
@@ -54,23 +66,22 @@ export default function PublicLayout({ children, showBack = false }: PublicLayou
               </button>
             )}
             {isUser ? (
-              <Link
-                to="/connect"
-                className={classNames(
-                  'ring-focus inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors',
-                  connection
-                    ? 'border-green-300 bg-green-50 text-green-700 hover:bg-green-100 dark:border-green-700/60 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50'
-                    : 'border-slate-300 bg-surface text-foreground hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800'
-                )}
-              >
-                <span
-                  className={classNames(
-                    'h-2 w-2 rounded-full',
-                    connection ? 'bg-green-500 shadow-[0_0_0_3px_rgb(34_197_94/0.15)]' : 'bg-slate-400'
-                  )}
-                />
-                {connection ? serverLabel(connection.host, connection.port) : 'Connect'}
-              </Link>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 dark:border-green-800/60 dark:bg-green-950/40 dark:text-green-300">
+                  <span className="h-2 w-2 rounded-full bg-green-500 shadow-[0_0_0_3px_rgb(34_197_94/0.2)] animate-pulse" />
+                  Live Catalog
+                </span>
+                <button
+                  type="button"
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  className="ring-focus inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-surface px-3 py-2 text-xs font-semibold text-foreground shadow-card transition-all hover:bg-slate-50 active:scale-95 disabled:opacity-60 dark:border-slate-600 dark:hover:bg-slate-800"
+                  title="Refresh catalog data"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 text-primary-500 ${refreshing ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
+                </button>
+              </div>
             ) : (
               <Link
                 to="/admin/login"

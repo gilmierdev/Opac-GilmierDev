@@ -1,6 +1,6 @@
 import { createReadStream, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest, type FastifyError } from 'fastify'
+import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyError } from 'fastify'
 import rateLimit from '@fastify/rate-limit'
 import type { Repositories } from '../database/pg/repositories'
 import type { ApiTokenService } from '../services/api-token.service'
@@ -11,7 +11,7 @@ export const API_VERSION = '1.0.0'
 
 export interface ApiServerDeps {
   repos: Repositories
-  tokenService: ApiTokenService
+  tokenService?: ApiTokenService
   imagesDir: string
   libraryName: () => Promise<string>
   libraryAddress: () => Promise<string>
@@ -67,28 +67,29 @@ export async function buildApiServer(deps: ApiServerDeps): Promise<ApiServer> {
     timeWindow: '1 minute'
   })
 
+  // Open CORS and standard security headers for public REST API access
   fastify.addHook('onSend', async (_request, reply) => {
     reply.header('X-Content-Type-Options', 'nosniff')
     reply.header('X-Frame-Options', 'DENY')
     reply.header('Referrer-Policy', 'no-referrer')
-    reply.header('Content-Security-Policy', "default-src 'none'")
+    reply.header('Access-Control-Allow-Origin', '*')
+    reply.header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+    reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
     reply.header('Cache-Control', 'no-store')
   })
 
-  const authPreHandler = async (
-    request: FastifyRequest,
-    reply: FastifyReply
-  ): Promise<void> => {
-    const header = request.headers.authorization ?? ''
-    const token = header.startsWith('Bearer ') ? header.slice(7).trim() : ''
-    if (!token || !(await deps.tokenService.verify(token))) {
-      return reply.code(401).send({ error: 'Unauthorized', message: 'Invalid or missing access token' })
-    }
-    void deps.tokenService.recordUsage()
+  // Track connected IPs
+  fastify.addHook('onRequest', async (request) => {
     deps.onRequest(request.ip ?? 'unknown')
-  }
+  })
 
-  fastify.addHook('preHandler', authPreHandler)
+  // CORS preflight support
+  fastify.options('/*', async (_request, reply) => {
+    reply.header('Access-Control-Allow-Origin', '*')
+    reply.header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+    reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    return reply.status(204).send()
+  })
 
   fastify.setErrorHandler((error: FastifyError, _request, reply) => {
     if (error.statusCode && error.statusCode >= 400 && error.statusCode < 500) {

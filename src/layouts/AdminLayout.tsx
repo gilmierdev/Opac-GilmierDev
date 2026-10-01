@@ -3,20 +3,16 @@ import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
   BookOpen,
-  PlusCircle,
   Users,
   Tags,
   Building2,
   Repeat,
-  Network,
   Settings,
   LogOut,
   LibraryBig,
-  ExternalLink,
-  Moon,
-  Sun
+  ExternalLink
 } from 'lucide-react'
-import { useAppStore, applyTheme } from '../stores/app'
+import { useAppStore } from '../stores/app'
 import { classNames, imageUrl, errorMessage } from '../lib/utils'
 
 const NAV: { label: string; items: { to: string; label: string; icon: React.ElementType; end: boolean }[] }[] = [
@@ -28,7 +24,6 @@ const NAV: { label: string; items: { to: string; label: string; icon: React.Elem
     label: 'Collection',
     items: [
       { to: '/admin/books', label: 'All Books', icon: BookOpen, end: false },
-      { to: '/admin/books/new', label: 'Add Book', icon: PlusCircle, end: false },
       { to: '/admin/authors', label: 'Authors', icon: Users, end: false },
       { to: '/admin/categories', label: 'Categories', icon: Tags, end: false },
       { to: '/admin/publishers', label: 'Publishers', icon: Building2, end: false }
@@ -41,7 +36,6 @@ const NAV: { label: string; items: { to: string; label: string; icon: React.Elem
   {
     label: 'System',
     items: [
-      { to: '/admin/network', label: 'Network Server', icon: Network, end: false },
       { to: '/admin/settings', label: 'Settings', icon: Settings, end: false }
     ]
   }
@@ -52,7 +46,6 @@ export default function AdminLayout() {
   const user = useAppStore((s) => s.user)
   const settings = useAppStore((s) => s.settings)
   const logo = imageUrl(settings.library_logo)
-  const theme = settings.theme ?? 'light'
 
   useEffect(() => {
     if (!user) {
@@ -71,12 +64,6 @@ export default function AdminLayout() {
     }
     useAppStore.getState().setUser(null)
     navigate('/admin/login', { replace: true })
-  }
-
-  const toggleTheme = async (next: 'light' | 'dark') => {
-    useAppStore.getState().setSettings({ ...settings, theme: next })
-    applyTheme(next)
-    void window.api.settings.set('theme', next).catch((err) => console.error(errorMessage(err)))
   }
 
   return (
@@ -141,17 +128,10 @@ export default function AdminLayout() {
           ))}
         </nav>
 
-        <div className="space-y-1 border-t border-slate-100 p-3 dark:border-slate-800">
-          <button
-            onClick={() => toggleTheme(theme === 'dark' ? 'light' : 'dark')}
-            className="ring-focus flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
-            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-          </button>
+        <div className="space-y-1 border-t border-slate-100 p-3">
           <Link
             to="/catalog"
-            className="ring-focus flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+            className="ring-focus flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
           >
             <ExternalLink className="h-4 w-4" />
             Public catalog

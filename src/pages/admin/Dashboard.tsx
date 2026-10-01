@@ -9,15 +9,13 @@ import {
   Users,
   Tags,
   Building2,
-  Clock,
-  Network as NetworkIcon,
-  Server
+  Clock
 } from 'lucide-react'
 import { useAppStore } from '../../stores/app'
 import Spinner from '../../components/ui/Spinner'
 import BookCover from '../../components/BookCover'
 import Badge from '../../components/ui/Badge'
-import type { DashboardStats, Book, ServerStatus } from '@shared/types'
+import type { DashboardStats, Book } from '@shared/types'
 import { formatDate, errorMessage, classNames } from '../../lib/utils'
 
 function StatCard({
@@ -63,17 +61,12 @@ export default function Dashboard() {
   const user = useAppStore((s) => s.user)
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [server, setServer] = useState<ServerStatus | null>(null)
 
   useEffect(() => {
     void window.api.books
       .stats()
       .then(setStats)
       .catch((err) => setError(errorMessage(err)))
-    window.api.network
-      .status()
-      .then(setServer)
-      .catch(() => setServer(null))
   }, [])
 
   if (error) {
@@ -91,48 +84,6 @@ export default function Dashboard() {
         </h1>
         <p className="mt-1.5 text-sm text-muted">Here's what's happening in your library today.</p>
       </div>
-
-      <Link
-        to="/admin/network"
-        className={classNames(
-          'ring-focus relative flex items-center justify-between gap-4 overflow-hidden rounded-2xl border p-4 shadow-card transition-all hover:shadow-lifted dark:border-slate-700',
-          server?.running
-            ? 'border-green-200 bg-gradient-to-r from-green-50 to-transparent dark:border-green-800/50 dark:from-green-900/20'
-            : 'border-slate-200 bg-surface dark:border-slate-700'
-        )}
-      >
-        <div className="flex items-center gap-4">
-          <span
-            className={classNames(
-              'flex h-11 w-11 items-center justify-center rounded-xl shadow-sm',
-              server?.running
-                ? 'bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-300'
-                : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
-            )}
-          >
-            <NetworkIcon className="h-5 w-5" />
-          </span>
-          <div>
-            <p className="text-sm font-semibold text-foreground">Network Server</p>
-            <p className="text-xs text-muted">
-              {server ? (
-                server.running ? (
-                  <>Online · {server.connectedUsers} connected user{server.connectedUsers === 1 ? '' : 's'}</>
-                ) : (
-                  'Offline — start sharing your catalog'
-                )
-              ) : (
-                'Status unavailable'
-              )}
-            </p>
-          </div>
-        </div>
-        {server?.running ? (
-          <Badge tone="success" icon={Server}>Online</Badge>
-        ) : (
-          <Badge tone="muted" icon={Server}>Offline</Badge>
-        )}
-      </Link>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
         <StatCard label="Total Books" value={stats.totalBooks} icon={BookOpen} tone="bg-orange-50 dark:bg-slate-800/60" to="/admin/books" />
@@ -160,16 +111,16 @@ export default function Dashboard() {
         {recent.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted">
             No books yet.{' '}
-            <Link to="/admin/books/new" className="text-primary-600 hover:underline dark:text-primary-300">
+            <Link to="/admin/books?new=true" className="text-primary-600 hover:underline">
               Add your first book
             </Link>
             .
           </p>
         ) : (
-          <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+          <ul className="divide-y divide-slate-100">
             {recent.map((book: Book) => (
               <li key={book.id}>
-                <Link to={`/admin/books/${book.id}/edit`} className="ring-focus group flex items-center gap-4 py-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                <Link to={`/admin/books?edit=${book.id}`} className="ring-focus group flex items-center gap-4 py-3 transition-colors hover:bg-slate-50">
                   <BookCover filename={book.cover_image} title={book.title} sizes="sm" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-foreground transition-colors group-hover:text-primary-600 dark:group-hover:text-primary-300">

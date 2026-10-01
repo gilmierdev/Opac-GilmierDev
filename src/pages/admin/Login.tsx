@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { Lock, KeyRound, UserRound, Eye, EyeOff, ShieldCheck, LibraryBig } from 'lucide-react'
+import { KeyRound, UserRound, Eye, EyeOff, ShieldCheck, LibraryBig } from 'lucide-react'
 import { useAppStore } from '../../stores/app'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
@@ -11,9 +11,16 @@ export default function Login() {
   const navigate = useNavigate()
   const location = useLocation() as { state?: { from?: string } }
   const settings = useAppStore((s) => s.settings)
+  const user = useAppStore((s) => s.user)
 
   const [loading, setLoading] = useState(true)
   const [mode, setMode] = useState<'loading' | 'setup' | 'login'>('loading')
+
+  useEffect(() => {
+    if (user) {
+      navigate('/admin', { replace: true })
+    }
+  }, [user, navigate])
 
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -156,8 +163,8 @@ export default function Login() {
         </form>
 
         <p className="mt-4 text-center text-xs text-muted">
-          <Link to="/" className="ring-focus inline-flex items-center gap-1 hover:text-foreground">
-            <Lock className="h-3 w-3" /> Back to catalog
+          <Link to="/catalog" className="ring-focus inline-flex items-center gap-1.5 hover:text-foreground">
+            <LibraryBig className="h-3.5 w-3.5 text-primary-500" /> View public catalog
           </Link>
         </p>
       </div>

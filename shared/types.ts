@@ -306,7 +306,7 @@ export interface InstallInfo {
 export interface ConnectionConfig {
   host: string
   port: number
-  token: string
+  token?: string
 }
 
 export interface ConnectionStatus {

@@ -10,6 +10,7 @@ interface AppState {
   connection: ConnectionConfig | null
   ready: boolean
   initialized: boolean
+  refreshKey: number
   setUser: (user: AdminUser | null) => void
   setSettings: (settings: SettingsMap) => void
   setPaths: (paths: AppPaths) => void
@@ -18,6 +19,7 @@ interface AppState {
   setConnection: (connection: ConnectionConfig | null) => void
   setReady: (ready: boolean) => void
   setInitialized: (value: boolean) => void
+  triggerRefresh: () => void
 }
 
 const DEFAULT_SETTINGS: SettingsMap = {
@@ -37,6 +39,7 @@ export const useAppStore = create<AppState>((set) => ({
   connection: null,
   ready: false,
   initialized: false,
+  refreshKey: 0,
   setUser: (user) => set({ user }),
   setSettings: (settings) => set({ settings }),
   setPaths: (paths) => set({ paths }),
@@ -44,16 +47,13 @@ export const useAppStore = create<AppState>((set) => ({
   setInstallInfo: (info) => set({ installInfo: info }),
   setConnection: (connection) => set({ connection }),
   setReady: (ready) => set({ ready }),
-  setInitialized: (value) => set({ initialized: value })
+  setInitialized: (value) => set({ initialized: value }),
+  triggerRefresh: () => set((s) => ({ refreshKey: s.refreshKey + 1 }))
 }))
 
-export function applyTheme(theme: 'light' | 'dark'): void {
+export function applyTheme(_theme?: string): void {
   const root = document.documentElement
-  if (theme === 'dark') {
-    root.classList.add('dark')
-  } else {
-    root.classList.remove('dark')
-  }
+  root.classList.remove('dark')
 }
 
 export async function bootstrapApp(): Promise<void> {
@@ -69,11 +69,18 @@ export async function bootstrapApp(): Promise<void> {
     store.setInstallInfo(installInfo)
 
     if (mode === 'user') {
-      const connection = await window.api.connection.get()
+      let connection = await window.api.connection.get()
+      if (!connection || !connection.host) {
+        connection = { host: '127.0.0.1', port: 47821 }
+      }
       store.setConnection(connection)
-      const settings = await window.api.settings.getAll()
-      store.setSettings(settings)
-      applyTheme(settings.theme)
+      try {
+        const settings = await window.api.settings.getAll()
+        store.setSettings(settings)
+        applyTheme(settings.theme)
+      } catch {
+        // Server might be starting up; will retry on refresh
+      }
     } else {
       const session = await window.api.auth.session()
       store.setUser(session)

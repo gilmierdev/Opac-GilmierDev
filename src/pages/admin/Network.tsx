@@ -2,10 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Network as NetworkIcon,
   Server as ServerIcon,
-  Play,
-  Square,
   RotateCcw,
-  KeyRound,
   ShieldCheck,
   Link2,
   Copy,
@@ -19,7 +16,7 @@ import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
 import Spinner from '../../components/ui/Spinner'
 import Input from '../../components/ui/Input'
-import type { ServerStatus, NetworkAccessInfo, ApiTokenInfo } from '@shared/types'
+import type { ServerStatus, NetworkAccessInfo } from '@shared/types'
 import { errorMessage, serverLabel } from '../../lib/utils'
 
 const DEFAULT_PORT = 47821
@@ -27,32 +24,35 @@ const DEFAULT_PORT = 47821
 export default function Network() {
   const [status, setStatus] = useState<ServerStatus | null>(null)
   const [access, setAccess] = useState<NetworkAccessInfo | null>(null)
-  const [tokenInfo, setTokenInfo] = useState<ApiTokenInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
   const [portInput, setPortInput] = useState(String(DEFAULT_PORT))
-  const [revealedToken, setRevealedToken] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const portInitialized = useRef(false)
 
   const refresh = useCallback(async () => {
     try {
-      const [server, firewall, token] = await Promise.all([
+      const [server, firewall] = await Promise.all([
         window.api.network.status(),
-        window.api.network.firewall(),
-        window.api.network.tokenInfo()
+        window.api.network.firewall()
       ])
       setStatus(server)
       setAccess(firewall)
-      setTokenInfo(token)
-      if (tokenInfo === null) setPortInput(String(server.apiPort || DEFAULT_PORT))
+      if (!server.running) {
+        window.api.network.start().then(setStatus).catch(() => undefined)
+      }
+      if (!portInitialized.current && server.apiPort) {
+        setPortInput(String(server.apiPort))
+        portInitialized.current = true
+      }
     } catch (err) {
       setMsg({ type: 'error', text: errorMessage(err) })
     } finally {
       setLoading(false)
     }
-  }, [tokenInfo])
+  }, [])
 
   useEffect(() => {
     void refresh()
@@ -83,7 +83,6 @@ export default function Network() {
     setMsg(null)
     try {
       await op()
-      setRevealedToken(null)
       await refresh()
       setMsg({ type: 'ok', text: 'Server updated.' })
     } catch (err) {
@@ -100,21 +99,6 @@ export default function Network() {
       return
     }
     void run(() => window.api.network.setPort(port))
-  }
-
-  const regenerateToken = async () => {
-    setBusy(true)
-    setMsg(null)
-    try {
-      const res = await window.api.network.regenerateToken()
-      setRevealedToken(res.token)
-      setTokenInfo(res.info)
-      setMsg({ type: 'ok', text: 'New access token generated. Copy it now — it will not be shown again.' })
-    } catch (err) {
-      setMsg({ type: 'error', text: errorMessage(err) })
-    } finally {
-      setBusy(false)
-    }
   }
 
   const copyText = async (text: string) => {
@@ -141,7 +125,7 @@ export default function Network() {
           </h1>
           <p className="text-sm text-muted">Share this library catalog with User computers on your network.</p>
         </div>
-        {running ? <Badge tone="success" icon={ServerIcon}>Online</Badge> : <Badge tone="danger" icon={Square}>Offline</Badge>}
+        {running ? <Badge tone="success" icon={ServerIcon}>Online (Auto-Started)</Badge> : <Badge tone="warning" icon={RotateCcw}>Starting…</Badge>}
       </div>
 
       {msg && (
@@ -160,25 +144,19 @@ export default function Network() {
 
       {/* Controls */}
       <section className="rounded-xl border border-slate-200 bg-surface p-6 shadow-card dark:border-slate-700">
-        <h2 className="mb-4 text-base font-semibold text-foreground">Server Controls</h2>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            onClick={() => void run(() => window.api.network.start())}
-            loading={busy}
-            disabled={running}
-            icon={<Play className="h-4 w-4" />}
-          >
-            Start Server
-          </Button>
-          <Button variant="outline" onClick={() => void run(() => window.api.network.stop())} loading={busy} disabled={!running} icon={<Square className="h-4 w-4" />}>
-            Stop
-          </Button>
-          <Button variant="secondary" onClick={() => void run(() => window.api.network.restart())} loading={busy} disabled={!running} icon={<RotateCcw className="h-4 w-4" />}>
-            Restart
-          </Button>
-          <Button variant="ghost" onClick={() => void refresh()} icon={<RefreshCcw className="h-4 w-4" />}>
-            Refresh
-          </Button>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-base font-semibold text-foreground">Network Server</h2>
+            <p className="text-xs text-muted">Runs automatically in the background when the app is open.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={() => void run(() => window.api.network.restart())} loading={busy} icon={<RotateCcw className="h-3.5 w-3.5" />}>
+              Restart Server
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => void refresh()} icon={<RefreshCcw className="h-3.5 w-3.5" />}>
+              Refresh
+            </Button>
+          </div>
         </div>
 
         {running && (
@@ -210,55 +188,72 @@ export default function Network() {
                 ))}
               </ul>
               <p className="mt-2 text-xs text-muted">
-                User computers connect using <span className="font-mono">{connectLabel}</span> and the access token below.
+                User computers and web clients connect using <span className="font-mono">{connectLabel}</span> (no access token required).
               </p>
             </div>
           </div>
         )}
       </section>
 
-      {/* Access token */}
+      {/* REST API Endpoints */}
       <section className="rounded-xl border border-slate-200 bg-surface p-6 shadow-card dark:border-slate-700">
-        <h2 className="mb-1 flex items-center gap-2 text-base font-semibold text-foreground">
-          <KeyRound className="h-4 w-4 text-primary-500" /> Access Token
-        </h2>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+            <Globe className="h-4 w-4 text-primary-500" /> Catalog REST API
+          </h2>
+          <Badge tone="success" icon={ShieldCheck}>Open Access (No Token Needed)</Badge>
+        </div>
         <p className="mb-4 text-sm text-muted">
-          User computers must present this token to connect. Regenerate it if you think it has been compromised — existing
-          connections will stop working.
+          The public catalog REST API is open for browsing and book searches. Clients and web frontends can query the database directly without requiring an access token.
         </p>
 
         <div className="space-y-3">
-          <div className="flex items-center gap-3 text-sm">
-            <span className="text-muted">Status:</span>
-            {access?.accessTokenConfigured ? (
-              <Badge tone="success" icon={ShieldCheck}>Configured{tokenInfo?.label ? ` · ${tokenInfo.label}` : ''}</Badge>
-            ) : (
-              <Badge tone="danger">Not configured yet</Badge>
-            )}
-          </div>
-
-          {tokenInfo?.created_at && (
-            <p className="text-xs text-muted">
-              Created {new Date(tokenInfo.created_at).toLocaleString()}
-              {tokenInfo.last_used_at ? ` · last used ${new Date(tokenInfo.last_used_at).toLocaleString()}` : ' · never used'}
-            </p>
-          )}
-
-          {revealedToken && (
-            <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800/70">
-              <p className="mb-1 text-xs font-semibold text-foreground">New access token (shown once)</p>
-              <div className="flex items-center gap-2">
-                <code className="min-w-0 flex-1 break-all font-mono text-sm text-primary-700 dark:text-primary-300">{revealedToken}</code>
-                <button type="button" onClick={() => void copyText(revealedToken)} className="ring-focus shrink-0 rounded-md p-1.5 text-muted hover:bg-slate-200 dark:hover:bg-slate-700" aria-label="Copy token">
-                  {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                </button>
+          <div className="rounded-lg bg-slate-50 p-4 dark:bg-slate-800/70 space-y-2">
+            <p className="text-xs font-semibold text-foreground">Available Public Endpoints</p>
+            <div className="space-y-1.5 font-mono text-xs">
+              <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                <span><span className="font-bold text-blue-600 dark:text-blue-400">GET</span> /api/v1/books</span>
+                <span className="text-muted font-sans text-[11px]">List and search catalog</span>
+              </div>
+              <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                <span><span className="font-bold text-blue-600 dark:text-blue-400">GET</span> /api/v1/books/:id</span>
+                <span className="text-muted font-sans text-[11px]">Book details by ID</span>
+              </div>
+              <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                <span><span className="font-bold text-blue-600 dark:text-blue-400">GET</span> /api/v1/library</span>
+                <span className="text-muted font-sans text-[11px]">Library name & information</span>
+              </div>
+              <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                <span><span className="font-bold text-blue-600 dark:text-blue-400">GET</span> /api/v1/authors</span>
+                <span className="text-muted font-sans text-[11px]">Authors list</span>
+              </div>
+              <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                <span><span className="font-bold text-blue-600 dark:text-blue-400">GET</span> /api/v1/categories</span>
+                <span className="text-muted font-sans text-[11px]">Categories list</span>
+              </div>
+              <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                <span><span className="font-bold text-blue-600 dark:text-blue-400">GET</span> /api/v1/covers/:filename</span>
+                <span className="text-muted font-sans text-[11px]">Book cover images</span>
               </div>
             </div>
-          )}
+          </div>
 
-          <Button onClick={regenerateToken} loading={busy} icon={<KeyRound className="h-4 w-4" />} variant={access?.accessTokenConfigured ? 'outline' : 'primary'}>
-            {access?.accessTokenConfigured ? 'Regenerate Token' : 'Generate Token'}
-          </Button>
+          {status && status.lanAddresses.length > 0 && (
+            <div className="flex items-center gap-2 pt-1">
+              <span className="text-xs text-muted">Example API URL:</span>
+              <code className="text-xs font-mono text-primary-600 dark:text-primary-400">
+                http://{status.lanAddresses[0]}:{status.apiPort}/api/v1/books
+              </code>
+              <button
+                type="button"
+                onClick={() => void copyText(`http://${status.lanAddresses[0]}:${status.apiPort}/api/v1/books`)}
+                className="ring-focus rounded p-1 text-muted hover:bg-slate-200 dark:hover:bg-slate-700"
+                title="Copy API URL"
+              >
+                {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+          )}
         </div>
       </section>
 

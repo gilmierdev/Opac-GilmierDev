@@ -1,11 +1,9 @@
 import { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { bootstrapApp, useAppStore } from './stores/app'
-import StartScreen from './pages/public/StartScreen'
 import Home from './pages/public/Home'
 import AdvancedSearch from './pages/public/AdvancedSearch'
 import BookDetails from './pages/public/BookDetails'
-import Connect from './pages/public/Connect'
 import Login from './pages/admin/Login'
 import AdminLayout from './layouts/AdminLayout'
 import Dashboard from './pages/admin/Dashboard'
@@ -22,7 +20,7 @@ import LoadingScreen from './components/LoadingScreen'
 export default function App() {
   const ready = useAppStore((s) => s.ready)
   const mode = useAppStore((s) => s.mode)
-  const connection = useAppStore((s) => s.connection)
+  const user = useAppStore((s) => s.user)
 
   useEffect(() => {
     void bootstrapApp()
@@ -32,23 +30,21 @@ export default function App() {
     return <LoadingScreen label="Starting OPAC Library..." />
   }
 
-  if (mode === 'user' && !connection) {
-    return (
-      <Routes>
-        <Route path="/connect" element={<Connect />} />
-        <Route path="*" element={<Navigate to="/connect" replace />} />
-      </Routes>
-    )
-  }
-
   return (
     <Routes>
-      <Route path="/" element={mode === 'user' && connection ? <Navigate to="/catalog" replace /> : <StartScreen />} />
+      <Route
+        path="/"
+        element={
+          mode === 'admin' ? (
+            user ? <Navigate to="/admin" replace /> : <Navigate to="/admin/login" replace />
+          ) : (
+            <Navigate to="/catalog" replace />
+          )
+        }
+      />
       <Route path="/catalog" element={<Home />} />
       <Route path="/catalog/advanced" element={<AdvancedSearch />} />
       <Route path="/catalog/book/:id" element={<BookDetails />} />
-
-      {mode === 'user' && <Route path="/connect" element={<Connect />} />}
 
       {mode === 'admin' && (
         <>
@@ -56,7 +52,7 @@ export default function App() {
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<Dashboard />} />
             <Route path="books" element={<Books />} />
-            <Route path="books/new" element={<BookForm />} />
+            <Route path="books/new" element={<Navigate to="/admin/books?new=true" replace />} />
             <Route path="books/:id/edit" element={<BookForm />} />
             <Route path="authors" element={<Authors />} />
             <Route path="categories" element={<Categories />} />
@@ -68,7 +64,11 @@ export default function App() {
         </>
       )}
 
-      {mode === 'admin' ? <Route path="*" element={<Navigate to="/" replace />} /> : <Route path="*" element={<Navigate to="/catalog" replace />} />}
+      {mode === 'admin' ? (
+        <Route path="*" element={<Navigate to={user ? '/admin' : '/admin/login'} replace />} />
+      ) : (
+        <Route path="*" element={<Navigate to="/catalog" replace />} />
+      )}
     </Routes>
   )
 }

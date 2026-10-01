@@ -9,14 +9,12 @@ import {
   FolderOpen,
   RefreshCcw,
   KeyRound,
-  Moon,
-  Sun,
   ImageIcon,
   Sparkles,
   Code2,
   Wand2
 } from 'lucide-react'
-import { useAppStore, applyTheme } from '../../stores/app'
+import { useAppStore } from '../../stores/app'
 import Input from '../../components/ui/Input'
 import Textarea from '../../components/ui/Textarea'
 import Button from '../../components/ui/Button'
@@ -123,12 +121,6 @@ export default function SettingsPage() {
     }
   }
 
-  const toggleTheme = async () => {
-    const next: 'light' | 'dark' = settings.theme === 'dark' ? 'light' : 'dark'
-    setSettings({ ...settings, theme: next })
-    applyTheme(next)
-    void window.api.settings.set('theme', next).catch((err) => setMsg(errorMessage(err)))
-  }
 
   const createBackup = async () => {
     setCreatingBackup(true)
@@ -267,19 +259,6 @@ export default function SettingsPage() {
         </form>
       </section>
 
-      {/* Appearance */}
-      <section className="rounded-xl border border-slate-200 bg-surface p-6 shadow-card dark:border-slate-700">
-        <h2 className="mb-2 text-base font-semibold text-foreground">Appearance</h2>
-        <p className="mb-4 text-sm text-muted">Choose how the application looks on this computer.</p>
-        <button
-          onClick={toggleTheme}
-          className="ring-focus inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-surface px-4 py-2 text-sm font-medium text-foreground hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
-        >
-          {settings.theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          Switch to {settings.theme === 'dark' ? 'Light' : 'Dark'} mode
-        </button>
-        <Badge tone="muted" className="ml-3 align-middle">{settings.theme === 'dark' ? 'Dark' : 'Light'} theme active</Badge>
-      </section>
 
       {/* Backup */}
       <section className="rounded-xl border border-slate-200 bg-surface p-6 shadow-card dark:border-slate-700">

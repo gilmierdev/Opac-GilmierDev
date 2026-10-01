@@ -1,12 +1,11 @@
 import { Link } from 'react-router-dom'
-import { LibraryBig, Lock, BookOpenText, Search, Server } from 'lucide-react'
+import { LibraryBig, Lock, BookOpenText, Search } from 'lucide-react'
 import { useAppStore } from '../../stores/app'
-import { imageUrl, serverLabel } from '../../lib/utils'
+import { imageUrl } from '../../lib/utils'
 
 export default function StartScreen() {
   const settings = useAppStore((s) => s.settings)
   const mode = useAppStore((s) => s.mode)
-  const connection = useAppStore((s) => s.connection)
   const logo = imageUrl(settings.library_logo)
   const isUser = mode === 'user'
 
@@ -46,15 +45,7 @@ export default function StartScreen() {
             <BookOpenText className="h-5 w-5" />
             Browse the Catalog
           </Link>
-          {isUser ? (
-            <Link
-              to="/connect"
-              className="ring-focus group inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-surface px-6 py-3.5 text-sm font-semibold text-foreground shadow-card transition-colors hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
-            >
-              <Server className="h-4 w-4" />
-              {connection ? `Change Server (${serverLabel(connection.host, connection.port)})` : 'Connect to a Server'}
-            </Link>
-          ) : (
+          {!isUser && (
             <Link
               to="/admin/login"
               className="ring-focus group inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-surface px-6 py-3.5 text-sm font-semibold text-foreground shadow-card transition-colors hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
@@ -68,10 +59,10 @@ export default function StartScreen() {
         <div className="mt-10 flex items-center justify-center gap-4 text-xs text-muted">
           <span className="inline-flex items-center gap-1.5">
             <Search className="h-3.5 w-3.5" />
-            {isUser ? 'Remote catalog' : 'Local catalog'}
+            {isUser ? 'Online catalog' : 'Local catalog'}
           </span>
           <span className="text-slate-300 dark:text-slate-600">•</span>
-          <span>{isUser ? (connection ? `Server ${serverLabel(connection.host, connection.port)}` : 'Not connected') : 'Works offline'}</span>
+          <span>{isUser ? 'Connected' : 'Works offline'}</span>
         </div>
         </div>
       </div>

@@ -107,13 +107,15 @@ function registerImageProtocol(appMode: AppMode): void {
       const filename = decodeURIComponent(url.pathname.replace(/^\/+/, ''))
       if (appMode === 'user') {
         const config = getConnectionOverride?.() ?? null
-        if (!config || !config.token) {
+        if (!config || !config.host) {
           return new Response('Not configured', { status: 503 })
         }
         const remoteUrl = `http://${config.host.trim().replace(/^https?:\/\//, '')}:${config.port}/api/v1/covers/${encodeURIComponent(filename)}`
-        return net.fetch(remoteUrl, {
-          headers: { Authorization: `Bearer ${config.token}` }
-        })
+        const headers: Record<string, string> = {}
+        if (config.token) {
+          headers['Authorization'] = `Bearer ${config.token}`
+        }
+        return net.fetch(remoteUrl, { headers })
       }
       const fullPath = resolveImagePath(getSystemDirs().imagesDir, filename)
       if (!existsSync(fullPath)) {
@@ -171,6 +173,15 @@ async function bootstrapAdmin(): Promise<void> {
   }
 
   registerAllIpc(services)
+
+  // Auto-start network server so catalog API is immediately online
+  try {
+    await services.network?.start()
+    logger.info('network server auto-started on application launch')
+  } catch (err) {
+    logger.error('failed to auto-start network server', err)
+  }
+
   finalizeBootstrap(dirs)
 }
 
@@ -208,6 +219,9 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  if (appServices?.network) {
+    appServices.network.stop().catch((err) => logger.warn('network server stop error', err))
+  }
   if (adminDb) {
     adminDb.end().catch((err) => logger.warn('postgres pool close error', err))
     adminDb = null
@@ -222,8 +236,32 @@ app.on('activate', () => {
 
 const smokeFlagIndex = process.argv.indexOf('--smoke-test')
 const smokeDirFlagIndex = process.argv.indexOf('--smoke-dir')
+const resetPasswordFlagIndex = process.argv.indexOf('--reset-password')
 
 app.whenReady().then(async () => {
+  if (resetPasswordFlagIndex !== -1) {
+    const nextArg = process.argv[resetPasswordFlagIndex + 1]
+    const customPassword = nextArg && !nextArg.startsWith('-') ? nextArg : undefined
+    try {
+      const { runResetPassword } = await import('./reset-password')
+      await runResetPassword({ newPassword: customPassword })
+      app.exit(0)
+    } catch (err) {
+      console.error('[reset-password] FAILED:', err)
+      logger.error('reset password failed', err)
+      try {
+        writeFileSync(
+          join(process.cwd(), '.password-reset.txt'),
+          `FAILED ${new Date().toISOString()}\n${err instanceof Error ? err.stack ?? err.message : String(err)}\n`
+        )
+      } catch {
+        // ignore diagnostics write failures
+      }
+      app.exit(1)
+    }
+    return
+  }
+
   if (smokeFlagIndex !== -1) {
     const dir = smokeDirFlagIndex !== -1 ? process.argv[smokeDirFlagIndex + 1] : '.smoke-tmp'
     try {

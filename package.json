@@ -15,6 +15,7 @@
     "icon": "node scripts/generate-icon.mjs",
     "start": "electron .",
     "smoke": "electron . --smoke-test --smoke-dir=.smoke-tmp",
+    "reset-password": "npm run build && electron . --reset-password",
     "build": "npm run typecheck && electron-vite build",
     "build:win": "npm run build && npm run dist:all",
     "dist:admin": "electron-builder --win -c builder.admin.yml",

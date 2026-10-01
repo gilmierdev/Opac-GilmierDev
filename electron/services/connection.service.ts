@@ -24,7 +24,7 @@ export function connectionStore(userDataDir: string): ConnectionStore {
     get(): ConnectionConfig | null {
       const file = connectionFilePath(userDataDir)
       try {
-        if (!existsSync(file)) return null
+        if (!existsSync(file)) return { host: '127.0.0.1', port: 47821 }
         const raw = JSON.parse(readFileSync(file, 'utf8')) as {
           host?: unknown
           port?: unknown
@@ -33,22 +33,22 @@ export function connectionStore(userDataDir: string): ConnectionStore {
         if (
           typeof raw.host !== 'string' ||
           !raw.host.trim() ||
-          typeof raw.port !== 'number' ||
-          typeof raw.token !== 'string'
+          typeof raw.port !== 'number'
         ) {
-          return null
+          return { host: '127.0.0.1', port: 47821 }
         }
-        return { host: sanitizeHost(raw.host), port: raw.port, token: decryptSecret(raw.token) }
+        const token = typeof raw.token === 'string' && raw.token.trim() ? decryptSecret(raw.token) : undefined
+        return { host: sanitizeHost(raw.host), port: raw.port, token }
       } catch (err) {
         logger.error('failed to read connection configuration', err)
-        return null
+        return { host: '127.0.0.1', port: 47821 }
       }
     },
     save(config: ConnectionConfig): void {
       const clean: ConnectionConfig = {
         host: sanitizeHost(config.host),
         port: config.port,
-        token: encryptSecret(config.token.trim())
+        token: config.token && config.token.trim() ? encryptSecret(config.token.trim()) : undefined
       }
       writeFileSync(connectionFilePath(userDataDir), JSON.stringify(clean, null, 2), 'utf8')
       logger.info('connection configuration saved')
@@ -64,19 +64,22 @@ export function connectionStore(userDataDir: string): ConnectionStore {
     async test(config: ConnectionConfig): Promise<ConnectionStatus> {
       const host = sanitizeHost(config.host)
       const port = config.port
-      const token = config.token.trim()
-      if (!host || !port || !token) {
-        return { ok: false, error: 'Enter the server address, port and access token' }
+      if (!host || !port) {
+        return { ok: false, error: 'Enter the server address and port' }
       }
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 8000)
       try {
+        const headers: Record<string, string> = {}
+        if (config.token?.trim()) {
+          headers['Authorization'] = `Bearer ${config.token.trim()}`
+        }
         const res = await fetch(`http://${host}:${port}/api/v1/library`, {
           signal: controller.signal,
-          headers: { Authorization: `Bearer ${token}` }
+          headers
         })
         if (res.status === 401) {
-          return { ok: false, error: 'Access token was rejected' }
+          return { ok: false, error: 'Access unauthorized' }
         }
         if (!res.ok) {
           return { ok: false, error: `Server returned HTTP ${res.status}` }

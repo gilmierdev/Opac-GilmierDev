@@ -13,19 +13,20 @@ export function remoteClient(getConfig: () => ConnectionConfig | null): RemoteEn
   return {
     async fetchText(path: string, init?: RequestInit): Promise<Response> {
       const config = getConfig()
-      if (!config || !config.token) {
+      if (!config || !config.host) {
         throw new Error('No library server connection configured')
       }
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 10_000)
       try {
+        const headers: Record<string, string> = { ...(init?.headers as Record<string, string>) }
+        if (config.token) {
+          headers['Authorization'] = `Bearer ${config.token}`
+        }
         return await fetch(`${apiBaseUrl(config)}${path}`, {
           ...init,
           signal: controller.signal,
-          headers: {
-            Authorization: `Bearer ${config.token}`,
-            ...init?.headers
-          }
+          headers
         })
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
@@ -41,9 +42,6 @@ export function remoteClient(getConfig: () => ConnectionConfig | null): RemoteEn
 
 export async function fetchJson<T>(client: RemoteEndpoint, path: string): Promise<T> {
   const res = await client.fetchText(path)
-  if (res.status === 401) {
-    throw new Error('Access token was rejected by the library server')
-  }
   if (!res.ok) {
     throw new Error(`The library server returned an error (HTTP ${res.status})`)
   }
