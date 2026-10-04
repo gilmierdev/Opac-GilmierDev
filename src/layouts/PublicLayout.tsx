@@ -42,13 +42,13 @@ export default function PublicLayout({ children, showBack = false }: PublicLayou
                 className="h-10 w-10 rounded-xl object-cover shadow-card ring-1 ring-slate-200 dark:ring-slate-700"
               />
             ) : (
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-800 shadow-glow transition-shadow group-hover:shadow-lifted">
+              <span className="flex h-10 w-10 items-center justify-center rounded bg-primary-900">
                 <LibraryBig className="h-5 w-5 text-white" />
               </span>
             )}
             <span className="flex flex-col leading-tight">
               <span className="text-sm font-bold text-foreground">{settings.library_name}</span>
-              <span className="flex items-center gap-1 text-[11px] font-medium text-primary-600 dark:text-primary-400">
+              <span className="flex items-center gap-1 text-[11px] font-medium text-foreground">
                 <BookMarked className="h-3 w-3" />
                 Online Catalog
               </span>
@@ -59,25 +59,21 @@ export default function PublicLayout({ children, showBack = false }: PublicLayou
             {showBack && (
               <button
                 onClick={() => history.back()}
-                className="ring-focus inline-flex items-center rounded-lg bg-slate-100 px-3 py-2 text-xs font-medium text-foreground hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700"
+                className="inline-flex items-center rounded border border-border bg-surface px-3 py-2 text-xs font-medium text-foreground"
               >
                 <X className="mr-1 h-3.5 w-3.5" /> Back
               </button>
             )}
             {isUser ? (
               <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 dark:border-green-800/60 dark:bg-green-950/40 dark:text-green-300">
-                  <span className="h-2 w-2 rounded-full bg-green-500 shadow-[0_0_0_3px_rgb(34_197_94/0.2)] animate-pulse" />
-                  Live Catalog
-                </span>
                 <button
                   type="button"
                   onClick={handleRefresh}
                   disabled={refreshing}
-                  className="ring-focus inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-surface px-3 py-2 text-xs font-semibold text-foreground shadow-card transition-all hover:bg-slate-50 active:scale-95 disabled:opacity-60 dark:border-slate-600 dark:hover:bg-slate-800"
+                  className="inline-flex items-center gap-1.5 rounded border border-border bg-surface px-3 py-2 text-xs font-semibold text-foreground disabled:opacity-60"
                   title="Refresh catalog data"
                 >
-                  <RefreshCw className={`h-3.5 w-3.5 text-primary-500 ${refreshing ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
                   <span>Refresh</span>
                 </button>
               </div>
@@ -85,7 +81,7 @@ export default function PublicLayout({ children, showBack = false }: PublicLayou
               <Link
                 to="/admin/login"
                 state={{ from: location.pathname }}
-                className="ring-focus inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-xs font-semibold text-white shadow-card transition-colors hover:bg-primary-700"
+                className="inline-flex items-center gap-1.5 rounded bg-primary-900 px-3 py-2 text-xs font-semibold text-white"
               >
                 <Lock className="h-3.5 w-3.5" />
                 Admin Login

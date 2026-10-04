@@ -5,12 +5,15 @@ import rateLimit from '@fastify/rate-limit'
 import type { Repositories } from '../database/pg/repositories'
 import type { ApiTokenService } from '../services/api-token.service'
 import type { BookFilters } from '@shared/types'
+import type { Services } from '../ipc/types'
 import { logger } from '../utils/logger'
+import { adminRoutes } from './admin-routes'
 
 export const API_VERSION = '1.0.0'
 
 export interface ApiServerDeps {
   repos: Repositories
+  services?: Services
   tokenService?: ApiTokenService
   imagesDir: string
   libraryName: () => Promise<string>
@@ -67,13 +70,17 @@ export async function buildApiServer(deps: ApiServerDeps): Promise<ApiServer> {
     timeWindow: '1 minute'
   })
 
+  if (deps.services) {
+    await fastify.register(adminRoutes, { services: deps.services })
+  }
+
   // Open CORS and standard security headers for public REST API access
   fastify.addHook('onSend', async (_request, reply) => {
     reply.header('X-Content-Type-Options', 'nosniff')
     reply.header('X-Frame-Options', 'DENY')
     reply.header('Referrer-Policy', 'no-referrer')
     reply.header('Access-Control-Allow-Origin', '*')
-    reply.header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+    reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
     reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
     reply.header('Cache-Control', 'no-store')
   })
@@ -86,7 +93,7 @@ export async function buildApiServer(deps: ApiServerDeps): Promise<ApiServer> {
   // CORS preflight support
   fastify.options('/*', async (_request, reply) => {
     reply.header('Access-Control-Allow-Origin', '*')
-    reply.header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+    reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
     reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
     return reply.status(204).send()
   })

@@ -55,18 +55,16 @@ export function buildAdminServices(
     const cfg = configStore(systemDirs)
     const images = bookImageService(systemDirs.imagesDir)
 
-    const network = networkService(
-      {
-        repos: repo,
-        tokenService,
-        imagesDir: systemDirs.imagesDir,
-        libraryName: async () => (await settings.getAll()).library_name,
-        libraryAddress: async () => (await settings.getAll()).library_address,
-        libraryContact: async () => (await settings.getAll()).contact_info,
-        libraryLogo: async () => (await settings.getAll()).library_logo
-      },
-      () => cfg.get()
-    )
+    const networkDeps: any = {
+      repos: repo,
+      tokenService,
+      imagesDir: systemDirs.imagesDir,
+      libraryName: async () => (await settings.getAll()).library_name,
+      libraryAddress: async () => (await settings.getAll()).library_address,
+      libraryContact: async () => (await settings.getAll()).contact_info,
+      libraryLogo: async () => (await settings.getAll()).library_logo
+    }
+    const network = networkService(networkDeps, () => cfg.get())
 
     const backup = backupService({
       db,
@@ -162,6 +160,7 @@ export function buildAdminServices(
       broadcastSession: broadcastCallbacks.broadcastSession
     }
 
+    networkDeps.services = services
     logger.info('admin services initialised', { port: info.port, database: info.database })
     return { services, db, provisioner, repo }
   }

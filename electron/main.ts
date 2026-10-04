@@ -14,7 +14,6 @@ import type { Services } from './ipc/types'
 import { buildAdminServices } from './services/admin.services'
 import { buildUserServices } from './services/user.services'
 import { migrateSqliteFrom } from './services/migrate-sqlite.service'
-import { IPC } from '../shared/api'
 
 const IMAGE_SCHEME = 'opac-img'
 
@@ -90,13 +89,7 @@ function createWindow(): void {
   }
 }
 
-function broadcastToRenderer(channel: string, payload?: unknown): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) {
-      win.webContents.send(channel, payload)
-    }
-  }
-}
+// broadcastToRenderer removed as it is no longer used in thin client mode
 
 let getConnectionOverride: (() => ConnectionConfig | null) | null = null
 
@@ -128,37 +121,27 @@ function registerImageProtocol(appMode: AppMode): void {
   })
 }
 
-async function bootstrapAdmin(): Promise<void> {
+async function runBackend(): Promise<void> {
   const dirs = getAppDirs()
   const systemDirs = getSystemDirs()
   ensureDirs(dirs)
   ensureSystemDirs(systemDirs)
   initLogger({ logsDir: systemDirs.logsDir })
-  enableIpcSenderValidation()
-  registerImageProtocol('admin')
 
   const makeProvisioner = provisioner(systemDirs, {
     onLog: (line: string) => logger.info(line)
   })
 
+  // We don't broadcast to renderer in pure backend mode
   const build = buildAdminServices(dirs, systemDirs, makeProvisioner, {
-    broadcastSettings: () => {
-      const settings = appServices?.settings
-      if (!settings) return
-      void settings.getAll().then((current) => {
-        broadcastToRenderer(IPC.eventSettingsChanged, current)
-      })
-    },
-    broadcastSession: () => {
-      broadcastToRenderer(IPC.eventSessionChanged)
-    }
+    broadcastSettings: () => {},
+    broadcastSession: () => {}
   })
 
   const { services, db, repo } = await build()
   appServices = services
   adminDb = db
 
-  // Opportunistic one-time migration from the legacy SQLite database.
   const legacySqlitePath = dirs.dbPath
   if (existsSync(legacySqlitePath)) {
     const report = await migrateSqliteFrom({
@@ -172,15 +155,59 @@ async function bootstrapAdmin(): Promise<void> {
     }
   }
 
-  registerAllIpc(services)
-
-  // Auto-start network server so catalog API is immediately online
   try {
     await services.network?.start()
-    logger.info('network server auto-started on application launch')
+    logger.info('network server auto-started in backend mode')
   } catch (err) {
     logger.error('failed to auto-start network server', err)
   }
+}
+
+import { configStore } from './services/config.service'
+
+async function bootstrapAdmin(): Promise<void> {
+  const dirs = getAppDirs()
+  ensureDirs(dirs)
+  initLogger({ logsDir: dirs.logsDir })
+  enableIpcSenderValidation()
+  registerImageProtocol('admin')
+
+  // The Admin UI is now a thin client. It communicates with the backend
+  // Windows service via HTTP. We only register local IPC handlers.
+  const { services, getConnection } = buildUserServices(dirs)
+  getConnectionOverride = getConnection
+  
+  // Override mode to 'admin' so the React app renders the admin dashboard
+  services.mode = async () => 'admin'
+  // Override isAuthenticated so local thin-client IPC mocks don't throw Auth errors
+  services.isAuthenticated = async () => true
+  
+  // We need to provide the local network port so the React app knows where the backend is.
+  const systemDirs = getSystemDirs()
+  const cfg = configStore(systemDirs).get()
+  
+  services.network = {
+    status: async () => ({
+      running: true,
+      library: 'OPAC Library',
+      databaseConnected: true,
+      host: 'localhost',
+      lanAddresses: [],
+      apiPort: cfg.apiPort,
+      apiVersion: '1.0.0',
+      connectedUsers: 1
+    }),
+    start: async () => services.network!.status(),
+    stop: async () => {},
+    restart: async () => services.network!.status(),
+    setPort: async () => services.network!.status(),
+    tokenInfo: async () => ({ configured: true, label: 'admin', created_at: '', last_used_at: '' }),
+    regenerateToken: async () => ({ token: '', info: { configured: true, label: 'admin', created_at: '', last_used_at: '' } }),
+    firewall: async () => ({ ok: true })
+  } as any
+
+  appServices = services
+  registerAllIpc(services)
 
   finalizeBootstrap(dirs)
 }
@@ -194,6 +221,32 @@ async function bootstrapUser(): Promise<void> {
 
   const { services, getConnection } = buildUserServices(dirs)
   getConnectionOverride = getConnection
+  
+  services.network = {
+    status: async () => ({
+      running: true,
+      library: 'OPAC Library',
+      databaseConnected: true,
+      host: 'localhost',
+      lanAddresses: [],
+      apiPort: getConnection()?.port ?? 47821,
+      apiVersion: '1.0.0',
+      connectedUsers: 0
+    }),
+    start: async () => services.network!.status(),
+    stop: async () => {},
+    restart: async () => services.network!.status(),
+    setPort: async () => services.network!.status(),
+    tokenInfo: async () => ({
+      active: true,
+      created: Date.now(),
+      expiresAt: Date.now() + 86400000,
+      preview: '...'
+    }),
+    regenerateToken: async () => ({ token: '', info: await services.network!.tokenInfo() }),
+    firewall: async () => ({ active: false, command: '' })
+  } as any
+
   appServices = services
   registerAllIpc(services)
   finalizeBootstrap(dirs)
@@ -282,6 +335,18 @@ app.whenReady().then(async () => {
       app.exit(1)
     }
     return
+  }
+
+  const runBackendIndex = process.argv.indexOf('--run-backend')
+  if (runBackendIndex !== -1) {
+    try {
+      await runBackend()
+      return // keep process alive
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      logger.error('failed to start backend', { message })
+      app.exit(1)
+    }
   }
 
   const mode = getAppMode()

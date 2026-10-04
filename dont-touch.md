@@ -4,6 +4,7 @@
 
 npm run dev (default)
 $env:OPAC_MODE="user"; npm run dev
+$env:OPAC_MODE="admin"; npm run dev
 
 admin
 Admin1234!

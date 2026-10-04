@@ -120,9 +120,8 @@ export default function Home() {
   return (
     <PublicLayout showBack={false}>
       {/* Hero search */}
-      <section className="relative overflow-hidden border-b border-slate-200 bg-surface dark:border-slate-700">
-        <div className="pointer-events-none absolute -top-24 left-1/2 h-64 w-[42rem] -translate-x-1/2 rounded-full bg-gradient-to-br from-primary-200/60 to-primary-400/10 blur-3xl" />
-        <div className="relative mx-auto max-w-7xl px-4 py-10 sm:px-6">
+      <section className="relative border-b border-border bg-surface">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
           <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
             Find a book in our library
           </h1>
@@ -135,20 +134,20 @@ export default function Home() {
               <input
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Search title, author, ISBN, subject…"
-                className="ring-focus w-full rounded-2xl border border-slate-300 bg-surface py-3.5 pl-12 pr-4 text-sm text-foreground shadow-lifted placeholder:text-muted/70 focus:border-primary-500 dark:border-slate-600"
+                placeholder="Search title, author, ISBN, subject..."
+                className="w-full rounded border border-border bg-surface py-3 pl-12 pr-4 text-sm text-foreground focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               />
             </div>
             <button
               type="submit"
-              className="ring-focus rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 px-6 text-sm font-semibold text-white shadow-card transition-all hover:shadow-lifted hover:brightness-105"
+              className="rounded bg-primary-900 px-6 text-sm font-semibold text-white"
             >
               Search
             </button>
             <button
               type="button"
               onClick={() => navigate('/catalog/advanced')}
-              className="ring-focus inline-flex items-center gap-1.5 rounded-2xl border border-slate-300 bg-surface px-4 text-sm font-medium text-foreground hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
+              className="inline-flex items-center gap-1.5 rounded border border-border bg-surface px-4 text-sm font-medium text-foreground"
             >
               <SlidersHorizontal className="h-4 w-4" />
               <span className="hidden sm:inline">Advanced</span>
@@ -159,10 +158,10 @@ export default function Home() {
           <div className="mt-6 flex flex-wrap gap-2">
             <button
               onClick={() => onQuickSearch('')}
-              className={`ring-focus rounded-full px-4 py-1.5 text-xs font-semibold transition-all ${
+              className={`rounded px-4 py-1.5 text-xs font-semibold ${
                 !searchQuery && !categoryId
-                  ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-card'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                  ? 'bg-primary-900 text-white'
+                  : 'bg-surface-2 text-foreground'
               }`}
             >
               All
@@ -171,10 +170,10 @@ export default function Home() {
               <button
                 key={c.id}
                 onClick={() => updateUrl({ category: String(c.id) })}
-                className={`ring-focus rounded-full px-4 py-1.5 text-xs font-semibold transition-all ${
+                className={`rounded px-4 py-1.5 text-xs font-semibold ${
                   categoryId === String(c.id)
-                    ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-card'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                    ? 'bg-primary-900 text-white'
+                    : 'bg-surface-2 text-foreground'
                 }`}
               >
                 {c.name}

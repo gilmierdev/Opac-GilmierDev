@@ -72,7 +72,7 @@ export default function AdvancedSearch() {
   const onClear = () => setFields(EMPTY)
 
   return (
-    <PublicLayout showBack={false}>
+    <PublicLayout showBack>
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
         <div className="mb-6 flex items-center gap-3">
           <SlidersHorizontal className="h-6 w-6 text-primary-600" />

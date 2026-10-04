@@ -47,7 +47,7 @@ export function networkService(
     }
   }
 
-  const fullDeps: ApiServerDeps = { ...deps, onRequest }
+  const getFullDeps = (): ApiServerDeps => ({ ...deps, onRequest })
 
   async function buildLibrary(): Promise<string> {
     try {
@@ -75,7 +75,7 @@ export function networkService(
     async start(): Promise<ServerStatus> {
       if (active) return this.status()
       const cfg = getConfig()
-      const api = await buildApiServer(fullDeps)
+      const api = await buildApiServer(getFullDeps())
       try {
         await api.instance.listen({ host: '0.0.0.0', port: cfg.apiPort })
       } catch (err) {

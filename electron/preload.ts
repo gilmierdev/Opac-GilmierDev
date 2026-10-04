@@ -4,7 +4,6 @@ import type { LibraryApi } from '../shared/api'
 import type {
   AdminUser,
   AuthorInput,
-  BackupFile,
   BookFilters,
   BookInput,
   BorrowingFilters,
@@ -12,8 +11,6 @@ import type {
   CategoryInput,
   ChangePasswordInput,
   CreateAdminInput,
-  ImportRunResult,
-  ImportSheetPreview,
   ImportTaskInput,
   PublisherInput,
   SettingsMap
@@ -38,6 +35,39 @@ function subscribe<T>(channel: string, callback: (payload: T) => void): () => vo
   const listener = (_event: Electron.IpcRendererEvent, payload: T) => callback(payload)
   ipcRenderer.on(channel, listener)
   return () => ipcRenderer.removeListener(channel, listener)
+}
+
+let activePort = -1
+let activeToken = ''
+
+async function getAdminBaseUrl(): Promise<string> {
+  if (activePort < 0) {
+    const st = await invoke<{ apiPort: number }>(IPC.networkStatus)
+    activePort = st.apiPort
+  }
+  return `http://127.0.0.1:${activePort}/api/v1/admin`
+}
+
+async function fetchAdmin<T>(path: string, options?: RequestInit): Promise<T> {
+  const base = await getAdminBaseUrl()
+  const headers = new Headers(options?.headers)
+  if (activeToken) {
+    headers.set('Authorization', `Bearer ${activeToken}`)
+  }
+  if (options?.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
+  const res = await fetch(`${base}${path}`, { ...options, headers })
+  const json = await res.json() as any
+  if (!json.ok) throw new Error(json.error || 'API Request failed')
+  return json.data as T
+}
+
+async function fetchRpc<T>(service: string, method: string, ...args: any[]): Promise<T> {
+  return fetchAdmin<T>('/rpc', {
+    method: 'POST',
+    body: JSON.stringify({ service, method, args })
+  })
 }
 
 const api: LibraryApi = {
@@ -68,77 +98,100 @@ const api: LibraryApi = {
   },
 
   database: {
-    status: () => invoke(IPC.databaseStatus),
-    clearCatalog: () => invoke<void>(IPC.databaseClearCatalog)
+    status: () => fetchRpc('database', 'status'),
+    clearCatalog: () => fetchRpc('database', 'clearCatalog')
   },
 
   auth: {
-    needsSetup: () => invoke<boolean>(IPC.authNeedsSetup),
-    setup: (input: CreateAdminInput) => invoke<AdminUser>(IPC.authSetup, input),
-    login: (username: string, password: string) => invoke<AdminUser>(IPC.authLogin, username, password),
-    logout: () => invoke<void>(IPC.authLogout),
-    session: () => invoke<AdminUser | null>(IPC.authSession),
-    changePassword: (input: ChangePasswordInput) => invoke<void>(IPC.authChangePassword, input),
-    recoverPassword: (input: { pin: string; newPassword: string; username?: string }) =>
-      invoke<{ username: string }>(IPC.authRecoverPassword, input)
+    needsSetup: () => fetchAdmin<boolean>('/auth/needs-setup'),
+    setup: (input: CreateAdminInput) => fetchAdmin<AdminUser>('/auth/setup', {
+      method: 'POST', body: JSON.stringify(input)
+    }),
+    login: async (username: string, password: string) => {
+      const res = await fetchAdmin<{ user: AdminUser, token: string }>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, password })
+      })
+      activeToken = res.token
+      return res.user
+    },
+    logout: async () => {
+      await fetchAdmin('/auth/logout', { method: 'POST' })
+      activeToken = ''
+    },
+    session: () => fetchAdmin<AdminUser | null>('/auth/session'),
+    changePassword: (input: ChangePasswordInput) => fetchRpc('auth', 'changePassword', input.currentPassword, input.newPassword),
+    recoverPassword: (input: { pin: string; newPassword: string; username?: string }) => fetchRpc('auth', 'recoverPassword', input.pin, input.newPassword, input.username)
   },
 
   books: {
-    list: (filters: BookFilters) => invoke(IPC.booksList, filters),
-    get: (id: number) => invoke(IPC.booksGet, id),
-    create: (input: BookInput) => invoke(IPC.booksCreate, input),
-    update: (id: number, input: BookInput) => invoke(IPC.booksUpdate, id, input),
-    archive: (id: number) => invoke(IPC.booksArchive, id),
-    restore: (id: number) => invoke(IPC.booksRestore, id),
-    delete: (id: number) => invoke<void>(IPC.booksDelete, id),
-    stats: () => invoke(IPC.booksStats),
-    importParse: (input: Omit<ImportTaskInput, 'columnMap' | 'options'>) => invoke<ImportSheetPreview>(IPC.booksImportParse, input),
-    importRun: (input: ImportTaskInput) => invoke<ImportRunResult>(IPC.booksImportRun, input)
+    list: async (filters: BookFilters) => {
+      if ((await api.mode()) === 'user') return invoke(IPC.booksList, filters)
+      return fetchRpc('books', 'list', filters)
+    },
+    get: async (id: number) => {
+      if ((await api.mode()) === 'user') return invoke(IPC.booksGet, id)
+      return fetchRpc('books', 'get', id)
+    },
+    create: (input: BookInput) => fetchRpc('books', 'create', input),
+    update: (id: number, input: BookInput) => fetchRpc('books', 'update', id, input),
+    archive: (id: number) => fetchRpc('books', 'archive', id),
+    restore: (id: number) => fetchRpc('books', 'restore', id),
+    delete: (id: number) => fetchRpc('books', 'delete', id),
+    stats: async () => {
+      if ((await api.mode()) === 'user') return invoke(IPC.booksStats)
+      return fetchRpc('books', 'stats')
+    },
+    importParse: (input: Omit<ImportTaskInput, 'columnMap' | 'options'>) => fetchRpc('books', 'importParse', input),
+    importRun: (input: ImportTaskInput) => fetchRpc('books', 'importRun', input)
   },
 
   authors: {
-    list: () => invoke(IPC.authorsList),
-    create: (input: AuthorInput) => invoke(IPC.authorsCreate, input),
-    update: (id: number, input: AuthorInput) => invoke(IPC.authorsUpdate, id, input),
-    archive: (id: number) => invoke(IPC.authorsArchive, id)
+    list: () => fetchRpc('authors', 'list'),
+    create: (input: AuthorInput) => fetchRpc('authors', 'create', input),
+    update: (id: number, input: AuthorInput) => fetchRpc('authors', 'update', id, input),
+    archive: (id: number) => fetchRpc('authors', 'archive', id)
   },
 
   categories: {
-    list: () => invoke(IPC.categoriesList),
-    create: (input: CategoryInput) => invoke(IPC.categoriesCreate, input),
-    update: (id: number, input: CategoryInput) => invoke(IPC.categoriesUpdate, id, input),
-    archive: (id: number) => invoke(IPC.categoriesArchive, id)
+    list: () => fetchRpc('categories', 'list'),
+    create: (input: CategoryInput) => fetchRpc('categories', 'create', input),
+    update: (id: number, input: CategoryInput) => fetchRpc('categories', 'update', id, input),
+    archive: (id: number) => fetchRpc('categories', 'archive', id)
   },
 
   publishers: {
-    list: () => invoke(IPC.publishersList),
-    create: (input: PublisherInput) => invoke(IPC.publishersCreate, input),
-    update: (id: number, input: PublisherInput) => invoke(IPC.publishersUpdate, id, input),
-    archive: (id: number) => invoke(IPC.publishersArchive, id)
+    list: () => fetchRpc('publishers', 'list'),
+    create: (input: PublisherInput) => fetchRpc('publishers', 'create', input),
+    update: (id: number, input: PublisherInput) => fetchRpc('publishers', 'update', id, input),
+    archive: (id: number) => fetchRpc('publishers', 'archive', id)
   },
 
   borrowings: {
-    list: (filters: BorrowingFilters) => invoke(IPC.borrowingsList, filters),
-    create: (input: BorrowingInput) => invoke(IPC.borrowingsCreate, input),
-    return: (id: number) => invoke(IPC.borrowingsReturn, id)
+    list: (filters: BorrowingFilters) => fetchRpc('borrowings', 'list', filters),
+    create: (input: BorrowingInput) => fetchRpc('borrowings', 'create', input),
+    return: (id: number) => fetchRpc('borrowings', 'return', id)
   },
 
   images: {
-    pickCover: () => invoke(IPC.imagesPickCover),
-    pickLogo: () => invoke(IPC.imagesPickLogo),
-    delete: (filename: string) => invoke(IPC.imagesDelete, filename)
+    pickCover: () => fetchRpc('images', 'pickCover'),
+    pickLogo: () => fetchRpc('images', 'pickLogo'),
+    delete: (filename: string) => fetchRpc('images', 'delete', filename)
   },
 
   backup: {
-    create: () => invoke<BackupFile>(IPC.backupCreate),
-    list: () => invoke<BackupFile[]>(IPC.backupList),
-    restore: (filename: string) => invoke<void>(IPC.backupRestore, filename),
-    pickAndRestore: () => invoke(IPC.backupPickAndRestore)
+    create: () => fetchRpc('backup', 'create'),
+    list: () => fetchRpc('backup', 'list'),
+    restore: (filename: string) => fetchRpc('backup', 'restore', filename),
+    pickAndRestore: () => fetchRpc('backup', 'pickAndRestore')
   },
 
   settings: {
-    getAll: () => invoke(IPC.settingsGetAll),
-    set: (key, value) => invoke(IPC.settingsSet, key, value)
+    getAll: async () => {
+      if ((await api.mode()) === 'user') return invoke(IPC.settingsGetAll)
+      return fetchRpc('settings', 'getAll')
+    },
+    set: (key: any, value: any) => fetchRpc('settings', 'set', key, value)
   },
 
   onSettingsChanged: (cb: (settings: SettingsMap) => void) =>
